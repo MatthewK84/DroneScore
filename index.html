@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#F2F3EE" />
+    <title>Drone Smoke</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body,
+      #root {
+        min-height: 100vh;
+      }
+      body {
+        font-family: "Barlow", "Segoe UI", system-ui, -apple-system, sans-serif;
+        background: #f2f3ee;
+        color: #1a2018;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      input,
+      textarea,
+      select,
+      button {
+        font-family: inherit;
+      }
+      button {
+        cursor: pointer;
+      }
+      button:hover:not(:disabled) {
+        filter: brightness(0.96);
+      }
+      button:disabled {
+        cursor: not-allowed;
+      }
+      :focus-visible {
+        outline: 3px solid #e05a0c;
+        outline-offset: 2px;
+      }
+      input:focus,
+      textarea:focus,
+      select:focus {
+        border-color: #3e4a2e;
+      }
+      /* Hide the scrollbar on the sticky tab bar while keeping it scrollable. */
+      .tab-bar::-webkit-scrollbar {
+        display: none;
+      }
+      .tab-bar {
+        scrollbar-width: none;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          scroll-behavior: auto !important;
+          transition: none !important;
+          animation: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
