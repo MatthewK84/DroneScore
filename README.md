@@ -1,4 +1,4 @@
-# Drone Smoke
+# Drone Score
 
 C-sUAS interceptor evaluation app. Authorized users log air-to-air
 engagements live from a phone or laptop. At end of day, an admin closes
