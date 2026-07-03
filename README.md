@@ -1,11 +1,11 @@
-# Drone Smoke
+# Drone Score
 
 C-sUAS interceptor evaluation app. Authorized users log air-to-air
 engagements live from a phone or laptop. At end of day, an admin closes
 the day and the app generates a Warfighter Observation Report (WOR) as a
 vector PDF covering results, weather, sun times, location, and scorer notes.
 
-## What changed in 2.0
+## What Changed
 
 - Live data entry replaces static seed files. Users add target drones and
   interceptors during the event, then score each engagement.
