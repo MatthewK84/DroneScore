@@ -1,11 +1,11 @@
-# Drone Score
+# Drone Smoke
 
 C-sUAS interceptor evaluation app. Authorized users log air-to-air
 engagements live from a phone or laptop. At end of day, an admin closes
 the day and the app generates a Warfighter Observation Report (WOR) as a
 vector PDF covering results, weather, sun times, location, and scorer notes.
 
-## What Changed
+## What changed in 2.0
 
 - Live data entry replaces static seed files. Users add target drones and
   interceptors during the event, then score each engagement.
@@ -35,6 +35,25 @@ vector PDF covering results, weather, sun times, location, and scorer notes.
 - **Day** Day settings, the "Done for the Day" closeout, and past reports.
 - **Schedule** Event agenda stored in the database.
 - **Feedback** Submit feedback; admins see full entries.
+
+## Public conditions view
+
+Outside personnel do not need a password. The sign-in screen has a "View
+current flying conditions" link that opens a public, read-only page showing
+the range weather and a GO / CAUTION / NO-GO estimate for each UAS group.
+It exposes no scores, engagements, drone names, or notes.
+
+The same weather and estimate appear live on the scorer and admin Score tab,
+refreshing every five minutes, so everyone sees the same conditions. The
+estimate is served by `GET /api/public/conditions`, the one unauthenticated
+endpoint; every other route still requires a session.
+
+Ratings come from wind, visibility, temperature, and sky conditions, with
+tighter wind limits for smaller groups. Thresholds live in
+`server/conditions.js` and are conservative range-safety heuristics, not
+regulatory limits. The public page shows the range name from the current
+day; set `DEFAULT_LOCATION_NAME`, or the day location, to a generic label if
+you would rather not name the site publicly.
 
 ## Local setup
 
