@@ -7,6 +7,7 @@ import { createPool, migrate } from "./db.js";
 import { createMailer } from "./mailer.js";
 import { createCatalogRouter } from "./routes/catalog.js";
 import { createOperationsRouter } from "./routes/operations.js";
+import { createPublicRouter } from "./routes/public.js";
 import { createSupportRouter } from "./routes/support.js";
 
 /**
@@ -52,6 +53,7 @@ function buildApp(pool, mailer) {
   app.use(sessionMiddleware(config));
 
   app.use("/api/auth", createAuthRouter(config));
+  app.use("/api", createPublicRouter(pool, config));
   app.use("/api", createCatalogRouter(pool));
   app.use("/api", createOperationsRouter(pool, config, mailer));
   app.use("/api", createSupportRouter(pool));
@@ -69,7 +71,18 @@ async function start() {
   try {
     await migrate(pool);
   } catch (error) {
-    console.error("Database migration failed:", error?.message);
+    console.error("Database migration failed.");
+    console.error(`  message: ${error?.message || "(empty)"}`);
+    console.error(`  code: ${error?.code || "n/a"}`);
+    if (Array.isArray(error?.errors)) {
+      for (const inner of error.errors) {
+        console.error(`  cause: ${inner?.message || inner}`);
+      }
+    }
+    console.error(
+      "  hint: confirm DATABASE_URL points at the Postgres service. " +
+        "For managed Postgres over public networking, set DATABASE_SSL=true."
+    );
     process.exit(1);
   }
   const mailer = createMailer(config);
