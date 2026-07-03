@@ -147,6 +147,11 @@ export function openWor(id) {
   window.open(`/api/days/${id}/wor.pdf`, "_blank", "noopener");
 }
 
+/** @returns {Promise<{ location: string, weather: object|null, assessments: object[] }>} */
+export function getConditions() {
+  return request("GET", "/public/conditions");
+}
+
 /** @returns {Promise<{ events: object[] }>} */
 export function listSchedule() {
   return request("GET", "/schedule");

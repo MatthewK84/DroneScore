@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getSession, logout } from "./api.js";
 import { C, DISPLAY, MONO, pillStyle, st } from "./styles.js";
 import { DayTab } from "./components/DayTab.jsx";
+import { ConditionsView } from "./components/ConditionsView.jsx";
 import { FeedbackTab } from "./components/FeedbackTab.jsx";
 import { FleetTab } from "./components/FleetTab.jsx";
 import { Login } from "./components/Login.jsx";
@@ -43,6 +44,7 @@ export default function App() {
   const [role, setRole] = useState(null);
   const [checking, setChecking] = useState(true);
   const [activeTab, setActiveTab] = useState("score");
+  const [publicView, setPublicView] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -83,7 +85,10 @@ export default function App() {
   }
 
   if (!role) {
-    return <Login onAuthed={setRole} />;
+    if (publicView) {
+      return <ConditionsView onBack={() => setPublicView(false)} />;
+    }
+    return <Login onAuthed={setRole} onViewPublic={() => setPublicView(true)} />;
   }
 
   const isAdmin = role === "admin";
