@@ -11,6 +11,7 @@ import {
 import { useStopwatch } from "../hooks.js";
 import { C, MONO, st } from "../styles.js";
 import { Loading, Notice } from "./ui.jsx";
+import { WeatherPanel } from "./WeatherPanel.jsx";
 
 /**
  * Score tab. Shows the live scoreboard for today, a large touch-friendly
@@ -163,6 +164,7 @@ export function ScoreTab({ isAdmin }) {
   return (
     <div>
       <DayStrip day={day} stats={stats} />
+      <WeatherPanel />
       {closed ? (
         <Notice tone="warn">
           Today is closed and the report is generated. An admin can reopen it from the Day tab to
