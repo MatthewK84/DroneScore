@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#F2F3EE" />
+    <title>{{TITLE}}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --paper: #f2f3ee;
+        --panel: #ffffff;
+        --ink: #1a2018;
+        --muted: #5a6355;
+        --olive: #3e4a2e;
+        --soft: #e9ece2;
+        --line: #d8dcd0;
+        --orange: #e05a0c;
+        --go: #2e7d32;
+        --caution: #b98a00;
+        --nogo: #b3261e;
+        --display: "Barlow Condensed", "Arial Narrow", sans-serif;
+        --body: "Barlow", "Segoe UI", system-ui, sans-serif;
+        --mono: "IBM Plex Mono", ui-monospace, monospace;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: var(--body);
+        background: var(--paper);
+        color: var(--ink);
+        -webkit-font-smoothing: antialiased;
+        padding: 24px 16px 56px;
+      }
+      .wrap { max-width: 720px; margin: 0 auto; }
+      header {
+        display: flex; align-items: flex-end; justify-content: space-between;
+        gap: 12px; flex-wrap: wrap;
+        border-bottom: 2px solid var(--ink); padding-bottom: 14px; margin-bottom: 18px;
+      }
+      h1 {
+        font-family: var(--display); font-weight: 700; font-size: 34px;
+        letter-spacing: 0.02em; text-transform: uppercase; line-height: 1;
+      }
+      .sub { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 6px; }
+      .status { font-family: var(--mono); font-size: 12px; color: var(--muted); text-align: right; }
+      .card {
+        background: var(--panel); border: 1px solid var(--line);
+        border-radius: 14px; padding: 18px; margin-bottom: 16px;
+      }
+      .sechead {
+        font-family: var(--display); font-weight: 700; font-size: 20px;
+        letter-spacing: 0.03em; text-transform: uppercase; color: var(--olive); margin-bottom: 12px;
+      }
+      .metrics {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px;
+      }
+      .metric { background: var(--soft); border-radius: 10px; padding: 10px 12px; }
+      .metric .k {
+        font-family: var(--display); font-size: 11px; letter-spacing: 0.06em;
+        text-transform: uppercase; color: var(--muted);
+      }
+      .metric .v { font-family: var(--mono); font-size: 22px; color: var(--ink); margin-top: 2px; }
+      .desc { font-family: var(--mono); font-size: 13px; color: var(--muted); margin-top: 12px; }
+      .stale {
+        display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px;
+        font-family: var(--display); font-weight: 600; font-size: 11px; letter-spacing: 0.05em;
+        text-transform: uppercase; color: var(--caution); border: 1.5px solid var(--caution);
+      }
+      .row {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        padding: 14px 0; border-bottom: 1px solid var(--line);
+      }
+      .row:last-child { border-bottom: none; }
+      .grp { font-family: var(--mono); font-size: 16px; font-weight: 500; }
+      .detail { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-left: 8px; }
+      .drivers { font-family: var(--body); font-size: 12px; color: var(--muted); margin-top: 4px; }
+      .pill {
+        font-family: var(--display); font-weight: 700; font-size: 15px; letter-spacing: 0.06em;
+        text-transform: uppercase; padding: 6px 14px; border-radius: 999px;
+        border: 2px solid var(--muted); color: var(--muted); white-space: nowrap;
+      }
+      .pill.go { color: var(--go); border-color: var(--go); }
+      .pill.caution { color: var(--caution); border-color: var(--caution); }
+      .pill.nogo { color: var(--nogo); border-color: var(--nogo); }
+      .note { font-family: var(--body); font-size: 12px; color: var(--muted); margin-top: 12px; }
+      footer {
+        font-family: var(--mono); font-size: 11px; color: var(--muted);
+        text-align: center; margin-top: 24px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div>
+          <h1>{{TITLE}}</h1>
+          <div class="sub" id="location">Loading...</div>
+        </div>
+        <div class="status" id="status">Checking conditions...</div>
+      </header>
+
+      <div class="card">
+        <div class="sechead">Current Weather</div>
+        <div class="metrics" id="metrics"></div>
+        <div class="desc" id="desc"></div>
+      </div>
+
+      <div class="card">
+        <div class="sechead">Flying Conditions by Class</div>
+        <div id="assessments"></div>
+        <div class="note">
+          Ratings apply DoD Group thresholds for wind (mph), visibility (SM), and temperature (F),
+          using the greater of sustained and gust wind. Confirm against local range rules before
+          flight.
+        </div>
+      </div>
+
+      <footer id="footer">Updates automatically.</footer>
+    </div>
+
+    <script type="module">
+      const REFRESH_MS = 60000;
+      const RATING_CLASS = { "GO": "go", "CAUTION": "caution", "NO-FLY": "nogo", "UNKNOWN": "" };
+
+      /** @returns {string} A value with a unit, or a dash when absent. */
+      function metric(value, unit) {
+        if (value === null || value === undefined) {
+          return "--";
+        }
+        return `${value}${unit}`;
+      }
+
+      /** @returns {string} Short local time from an ISO string, or "". */
+      function shortTime(iso) {
+        if (typeof iso !== "string") {
+          return "";
+        }
+        const parsed = new Date(iso);
+        if (Number.isNaN(parsed.getTime())) {
+          return "";
+        }
+        return parsed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      }
+
+      /** Renders the weather metric grid and description. */
+      function renderWeather(data) {
+        const grid = document.getElementById("metrics");
+        const desc = document.getElementById("desc");
+        const w = data.weather;
+        if (!w) {
+          grid.innerHTML = "";
+          desc.textContent = "Live weather is unavailable right now.";
+          return;
+        }
+        const cells = [
+          ["Temp", metric(w.tempF, " F")],
+          ["Wind", metric(w.windMph, " mph")],
+          ["Gust", metric(w.gustMph, " mph")],
+          ["Visibility", metric(w.visibilitySM, " SM")],
+          ["Humidity", metric(w.humidityPct, " %")],
+        ];
+        grid.innerHTML = cells
+          .map((c) => `<div class="metric"><div class="k">${c[0]}</div><div class="v">${c[1]}</div></div>`)
+          .join("");
+        const staleTag = data.stale ? '<span class="stale">Last known reading</span>' : "";
+        const observed = w.observedAt ? ` &middot; observed ${shortTime(w.observedAt)}` : "";
+        desc.innerHTML = `${w.description || "No description"}${observed}${staleTag}`;
+      }
+
+      /** Renders the per-group flying-conditions rows. */
+      function renderAssessments(list) {
+        const target = document.getElementById("assessments");
+        target.innerHTML = list
+          .map((row) => {
+            const cls = RATING_CLASS[row.rating] || "";
+            const drivers = (row.drivers || []).join(" &middot; ");
+            return (
+              `<div class="row"><div><span class="grp">${row.label}</span>` +
+              `<span class="detail">${row.detail}</span>` +
+              `<div class="drivers">${drivers}</div></div>` +
+              `<span class="pill ${cls}">${row.rating}</span></div>`
+            );
+          })
+          .join("");
+      }
+
+      /** Applies a full payload to the page. */
+      function render(data) {
+        document.getElementById("location").textContent = data.location || "";
+        renderWeather(data);
+        renderAssessments(data.assessments || []);
+        document.getElementById("status").textContent = `Updated ${shortTime(data.generatedAt)}`;
+      }
+
+      /** Fetches conditions, preserving the last render on failure. */
+      async function poll() {
+        try {
+          const response = await fetch("/api/conditions", { cache: "no-store" });
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          const data = await response.json();
+          render(data);
+        } catch {
+          document.getElementById("status").textContent = "Reconnecting...";
+        }
+      }
+
+      poll();
+      setInterval(poll, REFRESH_MS);
+    </script>
+  </body>
+</html>
