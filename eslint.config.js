@@ -47,7 +47,7 @@ export default [
   { ignores: ["dist/**", "node_modules/**"] },
   js.configs.recommended,
   {
-    files: ["server/**/*.js"],
+    files: ["server/**/*.js", "public-conditions/**/*.js", "test/**/*.js"],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: "module",
