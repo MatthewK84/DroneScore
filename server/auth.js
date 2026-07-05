@@ -8,7 +8,8 @@ import express from "express";
  */
 
 const COOKIE_NAME = "ds_session";
-const ROLE_RANK = Object.freeze({ scorer: 1, admin: 2 });
+const ROLE_RANK = Object.freeze({ viewer: 1, scorer: 2, admin: 3 });
+const VALID_ROLES = Object.freeze(["viewer", "scorer", "admin"]);
 const MAX_LOGIN_ATTEMPTS = 10;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 
@@ -60,7 +61,7 @@ export function verifyToken(token, secret) {
     if (typeof payload.exp !== "number" || payload.exp < Date.now()) {
       return null;
     }
-    if (payload.role !== "scorer" && payload.role !== "admin") {
+    if (!VALID_ROLES.includes(payload.role)) {
       return null;
     }
     return { role: payload.role };
@@ -98,6 +99,9 @@ function matchRole(password, passwords) {
   }
   if (safeEquals(password, passwords.scorer)) {
     return "scorer";
+  }
+  if (safeEquals(password, passwords.viewer)) {
+    return "viewer";
   }
   return null;
 }

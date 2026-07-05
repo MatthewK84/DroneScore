@@ -26,17 +26,18 @@ function readSessionSecret() {
   return randomBytes(32).toString("hex");
 }
 
-/** @returns {{ scorer: string, admin: string }} Shared access passwords. */
+/** @returns {{ scorer: string, admin: string, viewer: string }} Shared access passwords. */
 function readPasswords() {
   const scorer = (process.env.SCORER_PASSWORD || "").trim();
   const admin = (process.env.ADMIN_PASSWORD || "").trim();
-  if (!scorer || !admin) {
+  const viewer = (process.env.VIEWER_PASSWORD || "").trim();
+  if (!scorer || !admin || !viewer) {
     console.warn(
-      "SCORER_PASSWORD or ADMIN_PASSWORD is unset. Using insecure defaults. " +
-        "Set both in Railway before real use."
+      "SCORER_PASSWORD, ADMIN_PASSWORD, or VIEWER_PASSWORD is unset. Using insecure " +
+        "defaults. Set all three in Railway before real use."
     );
   }
-  return { scorer: scorer || "scorer", admin: admin || "admin" };
+  return { scorer: scorer || "scorer", admin: admin || "admin", viewer: viewer || "viewer" };
 }
 
 /** @returns {number} Parsed float env var, or the fallback. */

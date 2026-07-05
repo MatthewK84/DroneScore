@@ -82,14 +82,22 @@ function normalizeObservation(raw) {
   }
   const tempC = props.temperature?.value;
   const windKmh = props.windSpeed?.value;
+  const gustKmh = props.windGust?.value;
   const visibilityM = props.visibility?.value;
   return {
     tempC: roundOrNull(tempC, 1),
     tempF: roundOrNull(typeof tempC === "number" ? tempC * 1.8 + 32 : null, 0),
     windKts: roundOrNull(typeof windKmh === "number" ? windKmh * 0.53996 : null, 0),
+    windMph: roundOrNull(typeof windKmh === "number" ? windKmh * 0.621371 : null, 0),
+    gustKts: roundOrNull(typeof gustKmh === "number" ? gustKmh * 0.53996 : null, 0),
+    gustMph: roundOrNull(typeof gustKmh === "number" ? gustKmh * 0.621371 : null, 0),
     windDirDeg: roundOrNull(props.windDirection?.value, 0),
     visibilityKm: roundOrNull(
       typeof visibilityM === "number" ? visibilityM / 1000 : null,
+      1
+    ),
+    visibilitySM: roundOrNull(
+      typeof visibilityM === "number" ? visibilityM / 1609.34 : null,
       1
     ),
     humidityPct: roundOrNull(props.relativeHumidity?.value, 0),

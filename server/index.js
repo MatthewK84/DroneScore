@@ -8,6 +8,7 @@ import { createMailer } from "./mailer.js";
 import { createCatalogRouter } from "./routes/catalog.js";
 import { createOperationsRouter } from "./routes/operations.js";
 import { createPublicRouter } from "./routes/public.js";
+import { createReadonlyRouter } from "./routes/readonly.js";
 import { createSupportRouter } from "./routes/support.js";
 
 /**
@@ -54,6 +55,7 @@ function buildApp(pool, mailer) {
 
   app.use("/api/auth", createAuthRouter(config));
   app.use("/api", createPublicRouter(pool, config));
+  app.use("/api", createReadonlyRouter(pool, config));
   app.use("/api", createCatalogRouter(pool));
   app.use("/api", createOperationsRouter(pool, config, mailer));
   app.use("/api", createSupportRouter(pool));
@@ -65,23 +67,52 @@ function buildApp(pool, mailer) {
   return app;
 }
 
+/** @returns {Promise<void>} Resolves after the given delay. */
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+/**
+ * Runs the migration, retrying while the database is still coming up. This
+ * prevents a boot-time crash loop when the app starts before Postgres is
+ * ready, a common ordering on first deploy.
+ * @param {import("pg").Pool} pool
+ * @param {number} attempts
+ * @param {number} delayMs
+ * @returns {Promise<void>}
+ */
+async function migrateWithRetry(pool, attempts, delayMs) {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await migrate(pool);
+      return;
+    } catch (error) {
+      const detail = `${error?.message || "(empty)"}${error?.code ? ` [${error.code}]` : ""}`;
+      console.error(`Migration attempt ${attempt} of ${attempts} failed: ${detail}`);
+      if (Array.isArray(error?.errors)) {
+        for (const inner of error.errors) {
+          console.error(`  cause: ${inner?.message || inner}`);
+        }
+      }
+      if (attempt === attempts) {
+        throw error;
+      }
+      await sleep(delayMs);
+    }
+  }
+}
+
 /** Boots the database, then starts the HTTP listener. */
 async function start() {
   const pool = createPool(config);
   try {
-    await migrate(pool);
-  } catch (error) {
-    console.error("Database migration failed.");
-    console.error(`  message: ${error?.message || "(empty)"}`);
-    console.error(`  code: ${error?.code || "n/a"}`);
-    if (Array.isArray(error?.errors)) {
-      for (const inner of error.errors) {
-        console.error(`  cause: ${inner?.message || inner}`);
-      }
-    }
+    await migrateWithRetry(pool, 8, 3000);
+  } catch {
     console.error(
-      "  hint: confirm DATABASE_URL points at the Postgres service. " +
-        "For managed Postgres over public networking, set DATABASE_SSL=true."
+      "Database migration failed after retries. Confirm DATABASE_URL points at " +
+        "the Postgres service, and set DATABASE_SSL=true for public networking."
     );
     process.exit(1);
   }
