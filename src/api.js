@@ -152,6 +152,40 @@ export function getConditions() {
   return request("GET", "/public/conditions");
 }
 
+/** @returns {Promise<{ day: object|null, engagements: object[], stats: object|null }>} */
+export function getPublicDay() {
+  return request("GET", "/public/day/current");
+}
+
+/** @returns {Promise<{ days: object[] }>} */
+export function getPublicDays() {
+  return request("GET", "/public/days");
+}
+
+/** @returns {Promise<{ drones: object[], interceptors: object[] }>} */
+export function getPublicFleet() {
+  return request("GET", "/public/fleet");
+}
+
+/** @returns {Promise<{ events: object[] }>} */
+export function getPublicSchedule() {
+  return request("GET", "/public/schedule");
+}
+
+/** @returns {Promise<{ entries: object[] }>} */
+export function getPublicFeedback() {
+  return request("GET", "/public/feedback");
+}
+
+/**
+ * Opens the latest WOR PDF for a day through the read-only endpoint.
+ * @param {number} id
+ * @returns {void}
+ */
+export function openPublicWor(id) {
+  window.open(`/api/public/days/${id}/wor.pdf`, "_blank", "noopener");
+}
+
 /** @returns {Promise<{ events: object[] }>} */
 export function listSchedule() {
   return request("GET", "/schedule");

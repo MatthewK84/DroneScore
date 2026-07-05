@@ -23,6 +23,49 @@ export function useIsMobile() {
 }
 
 /**
+ * Polls a fetcher on an interval and reports the latest data. The fetcher
+ * must be a stable reference (module-level function or useCallback), so the
+ * effect does not re-subscribe on every render.
+ * @param {() => Promise<object>} fetcher
+ * @param {number} intervalMs
+ * @returns {{ data: object|null, error: string, loading: boolean }}
+ */
+export function usePolledResource(fetcher, intervalMs) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    const run = async () => {
+      try {
+        const result = await fetcher();
+        if (active) {
+          setData(result);
+          setError("");
+        }
+      } catch (err) {
+        if (active) {
+          setError(err?.message || "Failed to load.");
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+    run();
+    const timer = window.setInterval(run, intervalMs);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [fetcher, intervalMs]);
+
+  return { data, error, loading };
+}
+
+/**
  * A start/stop/reset stopwatch reporting whole elapsed seconds.
  * @returns {{ seconds: number, running: boolean, start: Function,
  *             stop: Function, reset: Function }}

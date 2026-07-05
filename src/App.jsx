@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getSession, logout } from "./api.js";
 import { C, DISPLAY, MONO, pillStyle, st } from "./styles.js";
 import { DayTab } from "./components/DayTab.jsx";
-import { ConditionsView } from "./components/ConditionsView.jsx";
+import { OpenView } from "./components/OpenView.jsx";
 import { FeedbackTab } from "./components/FeedbackTab.jsx";
 import { FleetTab } from "./components/FleetTab.jsx";
 import { Login } from "./components/Login.jsx";
@@ -13,7 +13,14 @@ import { ScoreTab } from "./components/ScoreTab.jsx";
  * Root application. Gates the UI behind a session, renders the header
  * and tab bar, and dispatches to the active tab. Role controls which
  * actions each tab exposes.
+ *
+ * VITE_APP_MODE selects the deployment's purpose at build time. "board"
+ * serves the read-only Open View to everyone, giving the general
+ * population a dedicated link. Any other value serves the full ops
+ * console where scorers and admins enter data.
  */
+
+const APP_MODE = import.meta.env.VITE_APP_MODE === "board" ? "board" : "ops";
 
 const TABS = Object.freeze([
   { key: "score", label: "Score" },
@@ -44,7 +51,6 @@ export default function App() {
   const [role, setRole] = useState(null);
   const [checking, setChecking] = useState(true);
   const [activeTab, setActiveTab] = useState("score");
-  const [publicView, setPublicView] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -85,10 +91,11 @@ export default function App() {
   }
 
   if (!role) {
-    if (publicView) {
-      return <ConditionsView onBack={() => setPublicView(false)} />;
-    }
-    return <Login onAuthed={setRole} onViewPublic={() => setPublicView(true)} />;
+    return <Login onAuthed={setRole} mode={APP_MODE} />;
+  }
+
+  if (APP_MODE === "board" || role === "viewer") {
+    return <OpenView onSignOut={signOut} />;
   }
 
   const isAdmin = role === "admin";
