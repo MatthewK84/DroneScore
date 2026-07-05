@@ -1,0 +1,13 @@
+{
+  "name": "drone-smoke-conditions",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone public weather and flying-conditions board for the Drone Smoke range.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
+}
