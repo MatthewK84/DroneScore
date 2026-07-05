@@ -1,14 +1,14 @@
 import express from "express";
 import { assessFlyingConditions } from "../conditions.js";
+import { requireRole } from "../auth.js";
 import { operationalDate } from "../time.js";
 import { getCurrentWeather } from "../weather.js";
 
 /**
- * Public conditions. One unauthenticated, read-only endpoint returns the
- * current weather and a flying-conditions rating per UAS group. It never
- * exposes scores, engagements, drone names, or notes, so it is safe to
- * show to outside personnel. Authed views call the same endpoint, giving
- * scorers, admins, and viewers a single shared source of truth.
+ * Public conditions. A read-only endpoint behind the viewer role returns
+ * current weather and a flying-conditions rating per UAS group. It exposes
+ * no scores, engagements, drone names, or notes. Scorers, admins, and
+ * viewers all call it, giving every signed-in role one shared source.
  */
 
 const WEATHER_DEADLINE_MS = 8000;
@@ -66,6 +66,9 @@ async function boundedWeather(location, config) {
   }
 }
 
+/** Module-scoped last-good observation, so a brief outage never blanks the view. */
+let lastObservation = { weather: null, at: 0 };
+
 /**
  * @param {import("pg").Pool} pool
  * @param {object} config
@@ -73,16 +76,25 @@ async function boundedWeather(location, config) {
 export function createPublicRouter(pool, config) {
   const router = express.Router();
 
-  router.get("/public/conditions", async (_req, res) => {
+  router.get("/public/conditions", requireRole("viewer"), async (_req, res) => {
     try {
       const location = await resolveLocation(pool, config);
-      const weather = await boundedWeather(location, config);
+      const fresh = await boundedWeather(location, config);
+      let weather = fresh;
+      let stale = false;
+      if (fresh) {
+        lastObservation = { weather: fresh, at: Date.now() };
+      } else if (lastObservation.weather) {
+        weather = lastObservation.weather;
+        stale = true;
+      }
       const assessments = assessFlyingConditions(weather);
       return res.json({
         success: true,
         location: location.locationName,
         coordinates: { latitude: location.latitude, longitude: location.longitude },
         weather,
+        stale,
         assessments,
         generatedAt: new Date().toISOString(),
       });

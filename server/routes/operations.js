@@ -112,27 +112,59 @@ function parseEngagement(body) {
   };
 }
 
-/** Generates a WOR for a day and stores it. Returns report metadata. */
-async function buildAndStoreWor(pool, config, day) {
-  const engagements = await loadDayEngagements(pool, day.id);
-  const stats = computeDayStats(engagements, config.timezone);
-  const seqResult = await pool.query(
-    "SELECT COUNT(*)::int AS count FROM wor_reports WHERE day_id = $1",
-    [day.id]
-  );
-  const report = await generateWor({
-    day: dayToApiRowShape(day),
-    engagements,
-    stats,
-    reportSeq: seqResult.rows[0].count + 1,
-    timezone: config.timezone,
-    classification: config.worClassification,
-  });
-  const inserted = await pool.query(
-    "INSERT INTO wor_reports (day_id, control_number, pdf) VALUES ($1, $2, $3) RETURNING id",
-    [day.id, report.controlNumber, report.buffer]
-  );
-  return { reportId: Number(inserted.rows[0].id), controlNumber: report.controlNumber };
+/**
+ * Closes a day in a single transaction: locks the day row, generates the
+ * WOR, stores it, and flips the status. The row lock serializes concurrent
+ * closes, so the report sequence number cannot collide.
+ * @param {import("pg").Pool} pool
+ * @param {object} config
+ * @param {number} dayId
+ * @returns {Promise<{ notFound?: boolean, reportId?: number, controlNumber?: string }>}
+ */
+async function closeDayAtomic(pool, config, dayId) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const dayResult = await client.query("SELECT * FROM days WHERE id = $1 FOR UPDATE", [dayId]);
+    if (dayResult.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return { notFound: true };
+    }
+    const day = dayResult.rows[0];
+    const engagementResult = await client.query(
+      `SELECT e.*, d.name AS drone_name, d.uas_group, i.name AS interceptor_name
+       FROM engagements e
+       LEFT JOIN drones d ON d.id = e.drone_id
+       LEFT JOIN interceptors i ON i.id = e.interceptor_id
+       WHERE e.day_id = $1 ORDER BY e.occurred_at ASC`,
+      [dayId]
+    );
+    const stats = computeDayStats(engagementResult.rows, config.timezone);
+    const seqResult = await client.query(
+      "SELECT COUNT(*)::int AS count FROM wor_reports WHERE day_id = $1",
+      [dayId]
+    );
+    const report = await generateWor({
+      day: dayToApiRowShape(day),
+      engagements: engagementResult.rows,
+      stats,
+      reportSeq: seqResult.rows[0].count + 1,
+      timezone: config.timezone,
+      classification: config.worClassification,
+    });
+    const inserted = await client.query(
+      "INSERT INTO wor_reports (day_id, control_number, pdf) VALUES ($1, $2, $3) RETURNING id",
+      [dayId, report.controlNumber, report.buffer]
+    );
+    await client.query("UPDATE days SET status='closed', closed_at=now() WHERE id=$1", [dayId]);
+    await client.query("COMMIT");
+    return { reportId: Number(inserted.rows[0].id), controlNumber: report.controlNumber };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 /** Normalizes day_date to a plain YYYY-MM-DD string for the WOR builder. */
@@ -309,13 +341,11 @@ export function createOperationsRouter(pool, config, mailer) {
       return res.status(400).json({ success: false, error: "Valid id is required." });
     }
     try {
-      const found = await pool.query("SELECT * FROM days WHERE id=$1", [id]);
-      if (found.rowCount === 0) {
+      const result = await closeDayAtomic(pool, config, id);
+      if (result.notFound) {
         return res.status(404).json({ success: false, error: "Day not found." });
       }
-      const report = await buildAndStoreWor(pool, config, found.rows[0]);
-      await pool.query("UPDATE days SET status='closed', closed_at=now() WHERE id=$1", [id]);
-      return res.json({ success: true, ...report });
+      return res.json({ success: true, reportId: result.reportId, controlNumber: result.controlNumber });
     } catch (error) {
       console.error("Close day failed:", error?.message);
       return res.status(500).json({ success: false, error: "Failed to close the day." });
