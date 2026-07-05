@@ -14,7 +14,7 @@ const REFRESH_MS = 5 * 60 * 1000;
 const RATING_COLOR = Object.freeze({
   "GO": C.success,
   "CAUTION": C.noAttempt,
-  "NO-GO": C.miss,
+  "NO-FLY": C.miss,
   "UNKNOWN": C.inkMuted,
 });
 
@@ -46,7 +46,12 @@ export function WeatherPanel() {
   const load = useCallback(async () => {
     try {
       const result = await getConditions();
-      setData(result);
+      setData((prev) => {
+        if (!result.weather && prev?.weather) {
+          return { ...prev, stale: true, generatedAt: result.generatedAt };
+        }
+        return result;
+      });
       setError("");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to load weather.");
@@ -79,18 +84,19 @@ export function WeatherPanel() {
       </div>
       {data?.location ? <div style={{ ...st.meta, margin: "6px 0 12px" }}>{data.location}</div> : null}
       {error ? <p style={st.error}>{error}</p> : null}
-      <WeatherMetrics weather={data?.weather} />
+      <WeatherMetrics weather={data?.weather} stale={data?.stale} />
       <ConditionsTable assessments={data?.assessments || []} />
       <p style={{ ...st.meta, marginTop: 10, fontSize: 11 }}>
-        Ratings are conservative range-safety estimates from wind, visibility, temperature, and sky
-        conditions. Confirm against local range rules before flight.
+        Ratings apply DoD Group thresholds for wind (mph), visibility (SM), and temperature (F),
+        using the greater of sustained and gust wind. Confirm against local range rules before
+        flight.
       </p>
     </div>
   );
 }
 
 /** The current observation grid. */
-function WeatherMetrics({ weather }) {
+function WeatherMetrics({ weather, stale }) {
   if (!weather) {
     return (
       <div style={{ ...st.notice, color: C.noAttempt, background: "#FBF3DC", marginTop: 12 }}>
@@ -100,9 +106,9 @@ function WeatherMetrics({ weather }) {
   }
   const cells = [
     { label: "Temp", value: `${metric(weather.tempF, " F")}` },
-    { label: "Wind", value: metric(weather.windKts, " kt") },
-    { label: "Wind dir", value: metric(weather.windDirDeg, " deg") },
-    { label: "Visibility", value: metric(weather.visibilityKm, " km") },
+    { label: "Wind", value: metric(weather.windMph, " mph") },
+    { label: "Gust", value: metric(weather.gustMph, " mph") },
+    { label: "Visibility", value: metric(weather.visibilitySM, " SM") },
     { label: "Humidity", value: metric(weather.humidityPct, " %") },
   ];
   return (
@@ -120,6 +126,7 @@ function WeatherMetrics({ weather }) {
       <div style={st.meta}>
         {weather.description || "No description"}
         {weather.observedAt ? ` · observed ${observedTime(weather.observedAt)}` : ""}
+        {stale ? <span style={{ ...pillStyle(C.noAttempt), marginLeft: 8, padding: "1px 8px", fontSize: 10 }}>Last known</span> : null}
       </div>
     </div>
   );

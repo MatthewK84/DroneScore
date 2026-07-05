@@ -7,11 +7,12 @@ import { C, DISPLAY, MONO, st } from "../styles.js";
  * or an admin password to the matching role, so no role picker is shown.
  */
 
-/** @param {{ onAuthed: (role: string) => void, onViewPublic: () => void }} props */
-export function Login({ onAuthed, onViewPublic }) {
+/** @param {{ onAuthed: (role: string) => void, mode: string }} props */
+export function Login({ onAuthed, mode }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const isBoard = mode === "board";
 
   const submit = useCallback(async () => {
     if (!password || busy) {
@@ -52,7 +53,7 @@ export function Login({ onAuthed, onViewPublic }) {
             type="password"
             value={password}
             autoFocus
-            placeholder="Enter scorer or admin password"
+            placeholder={isBoard ? "Enter viewer password" : "Enter scorer or admin password"}
             onChange={(e) => setPassword(e.target.value)}
             onKeyDown={onKeyDown}
           />
@@ -67,14 +68,10 @@ export function Login({ onAuthed, onViewPublic }) {
         {error ? <p style={st.error}>{error}</p> : null}
       </div>
       <p style={{ fontFamily: DISPLAY, fontSize: 13, color: C.inkMuted, letterSpacing: "0.04em" }}>
-        Scorers log engagements. Admins edit records and close the day.
+        {isBoard
+          ? "Enter the viewer password to open the read-only board."
+          : "Scorers log engagements. Admins edit records and close the day. Viewers see a read-only board."}
       </p>
-      <button
-        style={{ ...st.ghostBtn, width: "100%", marginTop: 8 }}
-        onClick={onViewPublic}
-      >
-        View current flying conditions
-      </button>
     </div>
   );
 }
