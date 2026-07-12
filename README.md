@@ -225,11 +225,15 @@ npm run lint    # ESLint across server, client, and tests
 
 ## The read-only board in detail
 
-The board is a live mirror of the whole application: the same pages as the
-ops console, with no editing anywhere. It polls every few seconds, so it
-tracks scorer and admin changes in near real time. Feedback shown on the
-board omits author identity. Every board request runs behind the viewer role,
-so it stays read-only even at the API level.
+The board is a running tally sheet, the only thing viewers see. It shows the
+day scoreboard (logged, hits, Pk, status), the live range weather with the
+GO / CAUTION / NO-FLY estimate per UAS Group, and every scored item with the
+weather captured at scoring time. Fleet, schedule, feedback, past days, and
+report downloads are not visible to viewers; the server exposes viewers a
+single read-only endpoint, so the rest is hidden at the API level, not just
+in the UI. The tally polls every few seconds, so it tracks scorer entries in
+near real time. Scorers and admins keep the full application through the ops
+console with the existing passwords.
 
 ## Flying conditions
 
