@@ -56,6 +56,22 @@ function weatherLine(weather) {
   return parts.join(" · ");
 }
 
+/**
+ * @param {object|null} day
+ * @returns {boolean} True when the displayed day is the local calendar date.
+ */
+function isCurrentDay(day) {
+  if (!day || typeof day.date !== "string") {
+    return false;
+  }
+  const localToday = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  return day.date === localToday;
+}
+
 /** @param {{ onSignOut: () => void }} props */
 export function OpenView({ onSignOut }) {
   const { data, loading } = usePolledResource(getPublicDay, POLL_MS);
@@ -79,9 +95,13 @@ export function OpenView({ onSignOut }) {
         <Loading label="Loading tally..." />
       ) : (
         <div>
-          <DayStrip day={data?.day} stats={data?.stats} />
+          <DayStrip day={data?.day} stats={data?.stats} isToday={isCurrentDay(data?.day)} />
           <WeatherPanel />
-          <TallySheet engagements={data?.engagements || []} />
+          <TallySheet
+            engagements={data?.engagements || []}
+            day={data?.day}
+            isToday={isCurrentDay(data?.day)}
+          />
         </div>
       )}
 
@@ -92,12 +112,13 @@ export function OpenView({ onSignOut }) {
   );
 }
 
-/** The dark scoreboard summarizing the current day. */
-function DayStrip({ day, stats }) {
+/** The dark scoreboard summarizing the displayed day. */
+function DayStrip({ day, stats, isToday }) {
   const overall = stats?.overall;
-  const statusColor = day?.status === "closed" ? C.noAttempt : C.success;
+  const liveColor = day?.status === "closed" ? C.noAttempt : C.success;
+  const statusColor = isToday ? liveColor : "rgba(242,243,238,0.6)";
   const cells = [
-    { label: "Date", value: day ? day.date.slice(5) : "--" },
+    { label: isToday ? "Date" : "Last Activity", value: day ? day.date.slice(5) : "--" },
     { label: "Logged", value: overall ? overall.total : 0 },
     { label: "Hits", value: overall ? overall.successes : 0 },
     { label: "Pk", value: overall ? fmtPk(overall.pk) : "--" },
@@ -113,7 +134,7 @@ function DayStrip({ day, stats }) {
       <div style={{ ...st.stripCell, borderRight: "none", display: "flex", flexDirection: "column", justifyContent: "center", gap: 4 }}>
         <div style={st.stripLabel}>Status</div>
         <div style={{ fontFamily: MONO, fontSize: 13, fontWeight: 500, color: statusColor, textTransform: "uppercase" }}>
-          {day?.status || "--"}
+          {day ? (isToday ? day.status : "prior day") : "--"}
         </div>
       </div>
     </div>
@@ -121,9 +142,9 @@ function DayStrip({ day, stats }) {
 }
 
 /** The running tally of scored items, weather at time of score included. */
-function TallySheet({ engagements }) {
+function TallySheet({ engagements, day, isToday }) {
   if (engagements.length === 0) {
-    return <p style={st.meta}>No engagements scored yet today.</p>;
+    return <EmptyTally day={day} isToday={isToday} />;
   }
   return (
     <div style={st.card}>
@@ -131,6 +152,22 @@ function TallySheet({ engagements }) {
       {engagements.map((engagement) => (
         <TallyRow key={engagement.id} engagement={engagement} />
       ))}
+    </div>
+  );
+}
+
+/** A friendly card shown while the tally has no entries. */
+function EmptyTally({ day, isToday }) {
+  const detail = isToday
+    ? "No data entries have been made yet today."
+    : `No data entries have been made today. The last recorded activity was ${day ? day.date : "on a prior day"}.`;
+  return (
+    <div style={{ ...st.card, textAlign: "center", padding: "34px 18px" }}>
+      <h2 style={{ ...st.secHead, marginBottom: 8 }}>Awaiting Scores</h2>
+      <p style={{ fontSize: 15, color: C.ink, margin: "0 0 6px" }}>{detail}</p>
+      <p style={{ ...st.meta, margin: 0 }}>
+        Scored engagements appear here automatically once scoring begins.
+      </p>
     </div>
   );
 }
