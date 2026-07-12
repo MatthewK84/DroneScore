@@ -59,6 +59,9 @@ function buildApp(pool, mailer) {
   app.use("/api", createCatalogRouter(pool));
   app.use("/api", createOperationsRouter(pool, config, mailer));
   app.use("/api", createSupportRouter(pool));
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ success: false, error: "Not found." });
+  });
 
   app.use(express.static(join(rootDir, "dist")));
   app.get("*", (_req, res) => {
