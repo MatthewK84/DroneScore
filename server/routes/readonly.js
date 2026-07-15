@@ -28,6 +28,7 @@ function mapEngagement(row) {
     sortie: row.sortie,
     droneName: row.drone_name || null,
     interceptorName: row.interceptor_name || null,
+    runType: row.run_type || "red_air",
     outcome: row.outcome,
     timeToInterceptS: row.time_to_intercept_s === null ? null : Number(row.time_to_intercept_s),
     engagementRangeM: row.engagement_range_m === null ? null : Number(row.engagement_range_m),

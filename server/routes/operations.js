@@ -2,7 +2,7 @@ import express from "express";
 import { requireRole } from "../auth.js";
 import { computeDayStats } from "../analytics.js";
 import { formatDateLong, operationalDate } from "../time.js";
-import { asId, asOptionalNumber, asOutcome, asText } from "../validate.js";
+import { asId, asOptionalNumber, asOutcome, asRunType, asText } from "../validate.js";
 import { getCurrentWeather } from "../weather.js";
 import { generateWor } from "../wor.js";
 
@@ -38,6 +38,7 @@ function engagementToApi(row) {
     droneName: row.drone_name || null,
     interceptorId: row.interceptor_id === null ? null : Number(row.interceptor_id),
     interceptorName: row.interceptor_name || null,
+    runType: row.run_type || "red_air",
     outcome: row.outcome,
     timeToInterceptS: row.time_to_intercept_s === null ? null : Number(row.time_to_intercept_s),
     engagementRangeM: row.engagement_range_m === null ? null : Number(row.engagement_range_m),
@@ -104,6 +105,7 @@ function parseEngagement(body) {
     sortie: asText(body?.sortie, 60),
     droneId: asId(body?.droneId),
     interceptorId: asId(body?.interceptorId),
+    runType: asRunType(body?.runType),
     outcome,
     timeToInterceptS: asOptionalNumber(body?.timeToInterceptS, 0, 86400),
     engagementRangeM: asOptionalNumber(body?.engagementRangeM, 0, 1000000),
@@ -262,14 +264,15 @@ export function createOperationsRouter(pool, config, mailer) {
       const weather = await snapshotWeather(day, config);
       const inserted = await pool.query(
         `INSERT INTO engagements
-           (day_id, sortie, drone_id, interceptor_id, outcome,
+           (day_id, sortie, drone_id, interceptor_id, run_type, outcome,
             time_to_intercept_s, engagement_range_m, altitude_m, notes, weather)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
         [
           day.id,
           payload.sortie,
           payload.droneId,
           payload.interceptorId,
+          payload.runType,
           payload.outcome,
           payload.timeToInterceptS,
           payload.engagementRangeM,
@@ -293,13 +296,14 @@ export function createOperationsRouter(pool, config, mailer) {
     }
     try {
       const result = await pool.query(
-        `UPDATE engagements SET sortie=$1, drone_id=$2, interceptor_id=$3, outcome=$4,
-           time_to_intercept_s=$5, engagement_range_m=$6, altitude_m=$7, notes=$8
-         WHERE id=$9`,
+        `UPDATE engagements SET sortie=$1, drone_id=$2, interceptor_id=$3, run_type=$4,
+           outcome=$5, time_to_intercept_s=$6, engagement_range_m=$7, altitude_m=$8, notes=$9
+         WHERE id=$10`,
         [
           payload.sortie,
           payload.droneId,
           payload.interceptorId,
+          payload.runType,
           payload.outcome,
           payload.timeToInterceptS,
           payload.engagementRangeM,
