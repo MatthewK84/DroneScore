@@ -24,10 +24,33 @@ const OUTCOMES = Object.freeze([
   { value: "not_attempted", label: "No Attempt", color: C.noAttempt },
 ]);
 
+const RUN_TYPES = Object.freeze([
+  { value: "red_air", label: "Red Air Intercept", hint: "Counts toward Pk" },
+  { value: "abort", label: "Abort Run", hint: "Excluded from Pk" },
+]);
+
+/**
+ * Abort runs test the abort or terminate command, so the stored outcome
+ * values read differently there than on an intercept run.
+ * @param {string} runType
+ * @returns {object[]} Outcome options labeled for this run type.
+ */
+function outcomesFor(runType) {
+  if (runType !== "abort") {
+    return OUTCOMES;
+  }
+  return [
+    { value: "success", label: "Abort OK", color: C.success },
+    { value: "unsuccessful", label: "Abort Failed", color: C.miss },
+    { value: "not_attempted", label: "No Attempt", color: C.noAttempt },
+  ];
+}
+
 const EMPTY_FORM = Object.freeze({
   sortie: "",
   droneId: "",
   interceptorId: "",
+  runType: "red_air",
   outcome: "success",
   timeToInterceptS: "",
   engagementRangeM: "",
@@ -42,6 +65,7 @@ function toPayload(form) {
     sortie: form.sortie,
     droneId: form.droneId === "" ? null : Number(form.droneId),
     interceptorId: form.interceptorId === "" ? null : Number(form.interceptorId),
+    runType: form.runType,
     outcome: form.outcome,
     timeToInterceptS: asNumber(form.timeToInterceptS),
     engagementRangeM: asNumber(form.engagementRangeM),
@@ -126,6 +150,7 @@ export function ScoreTab({ isAdmin }) {
       sortie: engagement.sortie || "",
       droneId: engagement.droneId === null ? "" : String(engagement.droneId),
       interceptorId: engagement.interceptorId === null ? "" : String(engagement.interceptorId),
+      runType: engagement.runType || "red_air",
       outcome: engagement.outcome,
       timeToInterceptS: engagement.timeToInterceptS === null ? "" : String(engagement.timeToInterceptS),
       engagementRangeM: engagement.engagementRangeM === null ? "" : String(engagement.engagementRangeM),
@@ -268,9 +293,34 @@ function EngagementForm(props) {
           ))}
         </select>
       </label>
+      <span style={st.label}>Run type</span>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+        {RUN_TYPES.map((option) => {
+          const active = form.runType === option.value;
+          return (
+            <button
+              key={option.value}
+              onClick={() => setField("runType", option.value)}
+              style={{
+                ...st.outcomeBtn,
+                minHeight: 60,
+                fontSize: 14,
+                borderColor: active ? C.olive : C.line,
+                color: active ? C.olive : C.inkMuted,
+                background: active ? `${C.olive}12` : C.panel,
+              }}
+            >
+              {option.label}
+              <span style={{ fontFamily: MONO, fontSize: 10, textTransform: "none", letterSpacing: 0 }}>
+                {option.hint}
+              </span>
+            </button>
+          );
+        })}
+      </div>
       <span style={st.label}>Outcome</span>
       <div style={{ ...st.outcomeRow, marginBottom: 14 }}>
-        {OUTCOMES.map((option) => {
+        {outcomesFor(form.runType).map((option) => {
           const active = form.outcome === option.value;
           return (
             <button
@@ -362,11 +412,27 @@ function EngagementLog({ engagements, isAdmin, onEdit, onDelete }) {
 
 /** A single engagement line with outcome color and admin controls. */
 function EngagementRow({ engagement, isAdmin, onEdit, onDelete }) {
-  const outcome = OUTCOMES.find((option) => option.value === engagement.outcome);
+  const runType = engagement.runType || "red_air";
+  const isAbort = runType === "abort";
+  const outcome = outcomesFor(runType).find((option) => option.value === engagement.outcome);
   return (
     <div style={st.rowItem}>
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span
+            style={{
+              fontFamily: MONO,
+              fontSize: 10,
+              fontWeight: 500,
+              padding: "2px 6px",
+              borderRadius: 4,
+              textTransform: "uppercase",
+              color: isAbort ? C.noAttempt : C.olive,
+              border: `1px solid ${isAbort ? C.noAttempt : C.olive}`,
+            }}
+          >
+            {isAbort ? "Abort" : "Red Air"}
+          </span>
           <strong style={{ fontFamily: MONO, fontSize: 14 }}>
             {engagement.interceptorName || "Unassigned"}
           </strong>

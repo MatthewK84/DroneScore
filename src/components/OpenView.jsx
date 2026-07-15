@@ -20,6 +20,18 @@ const OUTCOMES = Object.freeze({
   not_attempted: { label: "No Attempt", color: C.noAttempt },
 });
 
+/** Abort runs report whether the abort command worked, not an intercept. */
+const ABORT_OUTCOMES = Object.freeze({
+  success: { label: "Abort OK", color: C.success },
+  unsuccessful: { label: "Abort Failed", color: C.miss },
+  not_attempted: { label: "No Attempt", color: C.noAttempt },
+});
+
+/** @returns {boolean} True when the row is an intentional abort run. */
+function isAbortRun(engagement) {
+  return engagement.runType === "abort";
+}
+
 /** @returns {string} Pk to two decimals, or a dash. */
 function fmtPk(value) {
   return value === null || value === undefined ? "--" : value.toFixed(2);
@@ -119,8 +131,11 @@ function DayStrip({ day, stats, isToday }) {
   const statusColor = isToday ? liveColor : "rgba(242,243,238,0.6)";
   const cells = [
     { label: isToday ? "Date" : "Last Activity", value: day ? day.date.slice(5) : "--" },
-    { label: "Logged", value: overall ? overall.total : 0 },
-    { label: "Hits", value: overall ? overall.successes : 0 },
+    { label: "Runs", value: stats ? stats.totalRuns : 0 },
+    {
+      label: "Intercepts",
+      value: overall ? `${overall.successes}/${overall.attempts}` : "0/0",
+    },
     { label: "Pk", value: overall ? fmtPk(overall.pk) : "--" },
   ];
   return (
@@ -146,12 +161,29 @@ function TallySheet({ engagements, day, isToday }) {
   if (engagements.length === 0) {
     return <EmptyTally day={day} isToday={isToday} />;
   }
+  const redAir = engagements.filter((row) => !isAbortRun(row));
+  const aborts = engagements.filter(isAbortRun);
   return (
-    <div style={st.card}>
-      <h2 style={st.secHead}>Scored Items</h2>
-      {engagements.map((engagement) => (
-        <TallyRow key={engagement.id} engagement={engagement} />
-      ))}
+    <div>
+      <div style={st.card}>
+        <h2 style={st.secHead}>Red Air Intercept Runs</h2>
+        {redAir.length === 0 ? (
+          <p style={st.meta}>No Red Air intercept runs scored yet.</p>
+        ) : (
+          redAir.map((engagement) => <TallyRow key={engagement.id} engagement={engagement} />)
+        )}
+      </div>
+      {aborts.length === 0 ? null : (
+        <div style={st.card}>
+          <h2 style={st.secHead}>Intentional Abort Runs</h2>
+          <p style={{ ...st.meta, marginTop: -6, marginBottom: 10 }}>
+            Abort runs test the abort command and are excluded from Pk.
+          </p>
+          {aborts.map((engagement) => (
+            <TallyRow key={engagement.id} engagement={engagement} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -174,7 +206,8 @@ function EmptyTally({ day, isToday }) {
 
 /** One scored item with outcome, metrics, and its weather snapshot. */
 function TallyRow({ engagement }) {
-  const outcome = OUTCOMES[engagement.outcome];
+  const labels = isAbortRun(engagement) ? ABORT_OUTCOMES : OUTCOMES;
+  const outcome = labels[engagement.outcome];
   const wx = weatherLine(engagement.weather);
   return (
     <div style={st.rowItem}>
