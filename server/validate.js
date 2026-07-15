@@ -4,6 +4,7 @@
  */
 
 const OUTCOMES = Object.freeze(["success", "unsuccessful", "not_attempted"]);
+const RUN_TYPES = Object.freeze(["red_air", "abort"]);
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
@@ -51,6 +52,17 @@ export function asOptionalNumber(value, min, max) {
  */
 export function asOutcome(value) {
   return typeof value === "string" && OUTCOMES.includes(value) ? value : null;
+}
+
+/**
+ * Run type distinguishes a Red Air intercept run from an intentional abort
+ * run. Blank or unknown input falls back to red_air, matching how rows
+ * created before run types existed are stored.
+ * @param {unknown} value
+ * @returns {string} "red_air" or "abort".
+ */
+export function asRunType(value) {
+  return typeof value === "string" && RUN_TYPES.includes(value) ? value : "red_air";
 }
 
 /**

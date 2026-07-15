@@ -75,6 +75,10 @@ const SCHEMA_STATEMENTS = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_engagements_day ON engagements(day_id)`,
   `CREATE INDEX IF NOT EXISTS idx_wor_reports_day ON wor_reports(day_id)`,
+  // Added after initial release. Existing rows default to red_air, so historical
+  // reports keep the exact numbers they were generated with. Admins re-classify
+  // abort runs from the Score tab; nothing is rewritten automatically.
+  `ALTER TABLE engagements ADD COLUMN IF NOT EXISTS run_type TEXT NOT NULL DEFAULT 'red_air'`,
 ];
 
 const SEED_INTERCEPTORS = ["SICA", "REDDI", "WASP"];

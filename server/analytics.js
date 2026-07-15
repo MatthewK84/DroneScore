@@ -2,8 +2,15 @@ import { localHour } from "./time.js";
 
 /**
  * Day analytics. Pure functions over engagement rows.
- * Pk counts successes against attempted intercepts only;
- * "not attempted" runs are excluded from the denominator.
+ *
+ * Runs are split by type. A Red Air run is an intercept attempt against a
+ * target, so its success rate is a probability of kill. An abort run is an
+ * intentional test of the abort or terminate command, so its success rate
+ * measures whether the abort worked, which is a different question. Mixing
+ * the two understates interceptor performance, so Pk is computed from Red
+ * Air runs alone and abort runs are reported separately.
+ *
+ * Within either type, "not attempted" runs are excluded from the denominator.
  */
 
 const PERIODS = Object.freeze([
@@ -12,12 +19,22 @@ const PERIODS = Object.freeze([
   { key: "evening", label: "Evening (1700-2359L)", start: 17, end: 24 },
 ]);
 
-/** @returns {number | null} Pk to two decimals, or null with no attempts. */
+/** @returns {number | null} Success rate to two decimals, or null with no attempts. */
 export function probabilityOfKill(successes, attempts) {
   if (attempts === 0) {
     return null;
   }
   return Math.round((successes / attempts) * 100) / 100;
+}
+
+/**
+ * Rows written before run types existed have no run_type and are treated as
+ * Red Air, which preserves the numbers their reports were generated with.
+ * @param {object} row
+ * @returns {boolean}
+ */
+export function isAbortRun(row) {
+  return row.run_type === "abort";
 }
 
 /** @returns {number | null} Mean of finite numeric values, or null. */
@@ -32,7 +49,7 @@ function meanOf(values) {
   return Math.round((total / numbers.length) * 10) / 10;
 }
 
-/** @returns {object} Attempt, success, Pk, and average metric rollup. */
+/** @returns {object} Attempt, success, rate, and average metric rollup. */
 function rollup(rows) {
   const attempted = rows.filter((row) => row.outcome !== "not_attempted");
   const successes = attempted.filter((row) => row.outcome === "success");
@@ -73,20 +90,45 @@ function rollupByPeriod(rows, timezone) {
   }).filter((entry) => entry.total > 0);
 }
 
-/** @returns {object | null} Min/max temperature and wind across snapshots. */
+/**
+ * @param {object[]} values
+ * @param {string} key
+ * @returns {number[]} Only finite numeric values for that key. Guards against
+ *   undefined as well as null, so a snapshot missing a field can never turn
+ *   into NaN on the report.
+ */
+function finiteValues(values, key) {
+  return values
+    .map((entry) => entry[key])
+    .filter((value) => typeof value === "number" && Number.isFinite(value));
+}
+
+/**
+ * @param {object[]} rows
+ * @returns {object | null} Range of temperature, wind, and gust across the
+ *   day's captured snapshots. Wind is reported in mph to match the flying
+ *   conditions thresholds and the live board.
+ */
 export function summarizeWeather(rows) {
-  const snapshots = rows.map((row) => row.weather).filter((w) => w && w.tempF !== null);
+  const snapshots = rows
+    .map((row) => row.weather)
+    .filter((w) => w && typeof w === "object");
   if (snapshots.length === 0) {
     return null;
   }
-  const temps = snapshots.map((w) => w.tempF);
-  const winds = snapshots.map((w) => w.windKts).filter((v) => v !== null);
+  const temps = finiteValues(snapshots, "tempF");
+  const winds = finiteValues(snapshots, "windMph");
+  const gusts = finiteValues(snapshots, "gustMph");
   const described = snapshots.map((w) => w.description).filter((d) => d);
+  if (temps.length === 0 && winds.length === 0) {
+    return null;
+  }
   return {
-    tempMinF: Math.min(...temps),
-    tempMaxF: Math.max(...temps),
-    windMinKts: winds.length > 0 ? Math.min(...winds) : null,
-    windMaxKts: winds.length > 0 ? Math.max(...winds) : null,
+    tempMinF: temps.length > 0 ? Math.min(...temps) : null,
+    tempMaxF: temps.length > 0 ? Math.max(...temps) : null,
+    windMinMph: winds.length > 0 ? Math.min(...winds) : null,
+    windMaxMph: winds.length > 0 ? Math.max(...winds) : null,
+    gustMaxMph: gusts.length > 0 ? Math.max(...gusts) : null,
     descriptions: [...new Set(described)],
     samples: snapshots.length,
   };
@@ -94,16 +136,26 @@ export function summarizeWeather(rows) {
 
 /**
  * Full statistics package for one operational day.
+ *
+ * `overall` covers Red Air runs only, so `overall.pk` is a true probability
+ * of kill. `abort` covers abort runs. `totalRuns` counts every logged run of
+ * either type.
+ *
  * @param {object[]} rows Engagement rows joined with drone and interceptor names.
  * @param {string} timezone
  */
 export function computeDayStats(rows, timezone) {
+  const redAir = rows.filter((row) => !isAbortRun(row));
+  const aborts = rows.filter((row) => isAbortRun(row));
   return {
-    overall: rollup(rows),
-    byInterceptor: rollupBy(rows, (row) => row.interceptor_name),
-    byDrone: rollupBy(rows, (row) => row.drone_name),
-    byGroup: rollupBy(rows, (row) => row.uas_group && `Group ${row.uas_group}`),
-    byPeriod: rollupByPeriod(rows, timezone),
+    totalRuns: rows.length,
+    overall: rollup(redAir),
+    abort: rollup(aborts),
+    byInterceptor: rollupBy(redAir, (row) => row.interceptor_name),
+    byDrone: rollupBy(redAir, (row) => row.drone_name),
+    byGroup: rollupBy(redAir, (row) => row.uas_group && `Group ${row.uas_group}`),
+    byPeriod: rollupByPeriod(redAir, timezone),
+    abortByInterceptor: rollupBy(aborts, (row) => row.interceptor_name),
     weather: summarizeWeather(rows),
   };
 }
