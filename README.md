@@ -265,11 +265,22 @@ The database schema is created at boot; there is no separate migration step.
 
 ## Data notes
 
-- Probability of kill (Pk) counts successful intercepts against attempted
-  intercepts. Runs marked "No Attempt" are excluded from the denominator.
-- Weather is captured per engagement and summarized in the report. If the
-  weather service is briefly unreachable, scoring still proceeds and the app
-  serves the last good reading, marked stale, so the board never blanks.
+- Every run is logged as one of two types. A **Red Air intercept run** is an
+  attempt to intercept a target. An **abort run** is an intentional test of
+  the abort or terminate command. They answer different questions, so they
+  are reported separately throughout: the run log, the performance tables,
+  and the tally board all split them.
+- Probability of kill (Pk) is computed from **Red Air runs only**. Abort runs
+  are excluded from the Pk denominator, because a commanded abort is not a
+  failed intercept. Abort runs get their own success rate instead.
+- Within either type, runs marked "No Attempt" are excluded from the
+  denominator.
+- Runs logged before run types existed are treated as Red Air, so reports
+  generated earlier keep the exact numbers they were issued with. An admin can
+  re-classify any run from the Score tab; nothing is rewritten automatically.
+- Weather is captured per run and summarized in the report. If the weather
+  service is briefly unreachable, scoring still proceeds and the app serves
+  the last good reading, marked stale, so the board never blanks.
 - Closing a day runs in a single transaction that locks the day row, so the
   report sequence number cannot collide. Closing writes a numbered report
   (`WOR-YYYYMMDD-NN`). An admin can reopen a day; the next closeout writes the
