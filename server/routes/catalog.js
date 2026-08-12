@@ -145,6 +145,9 @@ export function createCatalogRouter(pool) {
         name: row.name,
         vendor: row.vendor,
         notes: row.notes,
+        // The Criteria tab edits this. Defaulting to an empty object rather
+        // than passing null through keeps every consumer off a null check.
+        profile: row.profile || {},
       }));
       return res.json({ success: true, interceptors });
     } catch (error) {

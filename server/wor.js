@@ -1,6 +1,12 @@
 import PdfPrinter from "pdfmake";
 import SunCalc from "suncalc";
 import { compactDate, formatDateLong, formatTimeLocal } from "./time.js";
+import {
+  buildBasisSection,
+  buildComplianceSection,
+  buildCriteriaSection,
+  buildMatrixSection,
+} from "./wor-criteria.js";
 
 /**
  * Warfighter Observation Report generator. Produces a vector PDF,
@@ -380,6 +386,15 @@ function buildDocDefinition(input) {
       ...buildObservations(engagements, timezone),
       heading(7, "Assessment"),
       { text: buildNarrative(stats) },
+      { text: "", pageBreak: "before" },
+      heading(8, "Capability Characterization: MOP Results"),
+      ...buildCriteriaSection(input.criteria, stats),
+      heading(9, "Key Performance Benchmarks: Threshold and Objective Compliance"),
+      ...buildComplianceSection(input.criteria),
+      heading(10, "Test Matrix Coverage"),
+      ...buildMatrixSection(input.criteria),
+      heading(11, "Benchmark Basis"),
+      ...buildBasisSection(input.criteria),
     ],
   };
 }

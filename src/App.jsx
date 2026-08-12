@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getSession, logout } from "./api.js";
 import { C, DISPLAY, MONO, pillStyle, st } from "./styles.js";
+import { CriteriaTab } from "./components/CriteriaTab.jsx";
 import { DayTab } from "./components/DayTab.jsx";
 import { OpenView } from "./components/OpenView.jsx";
 import { FeedbackTab } from "./components/FeedbackTab.jsx";
@@ -25,6 +26,7 @@ const APP_MODE = import.meta.env.VITE_APP_MODE === "board" ? "board" : "ops";
 const TABS = Object.freeze([
   { key: "score", label: "Score" },
   { key: "fleet", label: "Fleet" },
+  { key: "criteria", label: "Criteria" },
   { key: "day", label: "Day" },
   { key: "schedule", label: "Schedule" },
   { key: "feedback", label: "Feedback" },
@@ -34,6 +36,9 @@ const TABS = Object.freeze([
 function renderTab(activeKey, isAdmin) {
   if (activeKey === "fleet") {
     return <FleetTab isAdmin={isAdmin} />;
+  }
+  if (activeKey === "criteria") {
+    return <CriteriaTab isAdmin={isAdmin} />;
   }
   if (activeKey === "day") {
     return <DayTab isAdmin={isAdmin} />;

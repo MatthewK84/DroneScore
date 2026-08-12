@@ -2,9 +2,19 @@ import express from "express";
 import { requireRole } from "../auth.js";
 import { computeDayStats } from "../analytics.js";
 import { formatDateLong, operationalDate } from "../time.js";
-import { asId, asOptionalNumber, asOutcome, asRunType, asText } from "../validate.js";
+import {
+  asId,
+  asOptionalNumber,
+  asOutcome,
+  asRunType,
+  asStage,
+  asText,
+  asTriBoolean,
+} from "../validate.js";
 import { getCurrentWeather } from "../weather.js";
 import { generateWor } from "../wor.js";
+import { assembleReview } from "./criteria.js";
+import { buildMatrixCoverage } from "../testmatrix.js";
 
 /**
  * Operational days, engagements, and Warfighter Observation Reports.
@@ -25,6 +35,16 @@ function dayToApi(row) {
     status: row.status,
     weatherNote: row.weather_note,
     closedAt: row.closed_at,
+    metrics: {
+      falseAlarms: row.false_alarms === null ? null : Number(row.false_alarms),
+      operatingMinutes: row.operating_minutes === null ? null : Number(row.operating_minutes),
+      systemAborts: row.system_aborts === null ? null : Number(row.system_aborts),
+      repairMinutes: row.repair_minutes === null ? null : Number(row.repair_minutes),
+      operateCrew: row.operate_crew === null ? null : Number(row.operate_crew),
+      setupCrew: row.setup_crew === null ? null : Number(row.setup_crew),
+      setupMinutes: row.setup_minutes === null ? null : Number(row.setup_minutes),
+      sensorSource: row.sensor_source || "",
+    },
   };
 }
 
@@ -46,7 +66,21 @@ function engagementToApi(row) {
     notes: row.notes,
     weather: row.weather,
     occurredAt: row.occurred_at,
+    stageReached: row.stage_reached || null,
+    testProfileId: row.test_profile_id === null ? null : Number(row.test_profile_id),
+    detectRangeM: numberOrNull(row.detect_range_m),
+    detectAltM: numberOrNull(row.detect_alt_m),
+    trackContinuityPct: numberOrNull(row.track_continuity_pct),
+    trackErrorM: numberOrNull(row.track_error_m),
+    idRangeM: numberOrNull(row.id_range_m),
+    idTimeS: numberOrNull(row.id_time_s),
+    identifiedOk: row.identified_ok === null ? null : Boolean(row.identified_ok),
   };
+}
+
+/** @returns {number | null} A numeric column converted for the API. */
+function numberOrNull(value) {
+  return value === null || value === undefined ? null : Number(value);
 }
 
 /** Finds or creates the day row for today's operational date. */
@@ -111,7 +145,34 @@ function parseEngagement(body) {
     engagementRangeM: asOptionalNumber(body?.engagementRangeM, 0, 1000000),
     altitudeM: asOptionalNumber(body?.altitudeM, 0, 30000),
     notes: asText(body?.notes, 4000),
+    stageReached: asStage(body?.stageReached),
+    testProfileId: asId(body?.testProfileId),
+    detectRangeM: asOptionalNumber(body?.detectRangeM, 0, 1000000),
+    detectAltM: asOptionalNumber(body?.detectAltM, 0, 30000),
+    trackContinuityPct: asOptionalNumber(body?.trackContinuityPct, 0, 100),
+    trackErrorM: asOptionalNumber(body?.trackErrorM, 0, 100000),
+    idRangeM: asOptionalNumber(body?.idRangeM, 0, 1000000),
+    idTimeS: asOptionalNumber(body?.idTimeS, 0, 86400),
+    identifiedOk: asTriBoolean(body?.identifiedOk),
   };
+}
+
+/** Column order shared by the engagement insert and update statements. */
+const MEASURE_COLUMNS = Object.freeze([
+  "stageReached",
+  "testProfileId",
+  "detectRangeM",
+  "detectAltM",
+  "trackContinuityPct",
+  "trackErrorM",
+  "idRangeM",
+  "idTimeS",
+  "identifiedOk",
+]);
+
+/** @returns {unknown[]} Advanced measure values in column order. */
+function measureValues(payload) {
+  return MEASURE_COLUMNS.map((key) => payload[key]);
 }
 
 /**
@@ -134,7 +195,8 @@ async function closeDayAtomic(pool, config, dayId) {
     }
     const day = dayResult.rows[0];
     const engagementResult = await client.query(
-      `SELECT e.*, d.name AS drone_name, d.uas_group, i.name AS interceptor_name
+      `SELECT e.*, d.name AS drone_name, d.uas_group, i.name AS interceptor_name,
+              i.profile AS interceptor_profile
        FROM engagements e
        LEFT JOIN drones d ON d.id = e.drone_id
        LEFT JOIN interceptors i ON i.id = e.interceptor_id
@@ -146,10 +208,12 @@ async function closeDayAtomic(pool, config, dayId) {
       "SELECT COUNT(*)::int AS count FROM wor_reports WHERE day_id = $1",
       [dayId]
     );
+    const criteria = await loadCriteriaPackage(client, day, engagementResult.rows, config);
     const report = await generateWor({
       day: dayToApiRowShape(day),
       engagements: engagementResult.rows,
       stats,
+      criteria,
       reportSeq: seqResult.rows[0].count + 1,
       timezone: config.timezone,
       classification: config.worClassification,
@@ -167,6 +231,44 @@ async function closeDayAtomic(pool, config, dayId) {
   } finally {
     client.release();
   }
+}
+
+/**
+ * Assembles the Capability Characterization package for the report inside
+ * the closing transaction, so the benchmarks and matrix the report is
+ * judged against are the ones in force at the moment the day closed.
+ * @param {import("pg").PoolClient} client
+ * @param {object} day
+ * @param {object[]} rows
+ * @param {object} config
+ * @returns {Promise<object>}
+ */
+async function loadCriteriaPackage(client, day, rows, config) {
+  const benchmarks = await client.query("SELECT * FROM benchmarks");
+  const profiles = await client.query("SELECT * FROM test_profiles ORDER BY code ASC");
+  const targets = await client.query(
+    "SELECT * FROM test_profile_targets ORDER BY profile_id, sequence"
+  );
+  const matrixProfiles = profiles.rows.map((profile) => ({
+    id: Number(profile.id),
+    code: profile.code,
+    mission: profile.mission,
+    timeOfDay: profile.time_of_day,
+    dataPointsRequired: Number(profile.data_points_required),
+    notes: profile.notes,
+    targets: targets.rows
+      .filter((target) => String(target.profile_id) === String(profile.id))
+      .map((target) => ({
+        targetName: target.target_name,
+        elevationFtAgl: target.elevation_ft_agl === null ? null : Number(target.elevation_ft_agl),
+        speedMph: target.speed_mph === null ? null : Number(target.speed_mph),
+        launchPoint: target.launch_point,
+      })),
+  }));
+  return {
+    ...assembleReview(day, rows, benchmarks.rows, config),
+    matrix: buildMatrixCoverage(matrixProfiles, rows),
+  };
 }
 
 /** Normalizes day_date to a plain YYYY-MM-DD string for the WOR builder. */
@@ -265,8 +367,11 @@ export function createOperationsRouter(pool, config, mailer) {
       const inserted = await pool.query(
         `INSERT INTO engagements
            (day_id, sortie, drone_id, interceptor_id, run_type, outcome,
-            time_to_intercept_s, engagement_range_m, altitude_m, notes, weather)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+            time_to_intercept_s, engagement_range_m, altitude_m, notes, weather,
+            stage_reached, test_profile_id, detect_range_m, detect_alt_m,
+            track_continuity_pct, track_error_m, id_range_m, id_time_s, identified_ok)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+                 $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING id`,
         [
           day.id,
           payload.sortie,
@@ -279,6 +384,7 @@ export function createOperationsRouter(pool, config, mailer) {
           payload.altitudeM,
           payload.notes,
           weather === null ? null : JSON.stringify(weather),
+          ...measureValues(payload),
         ]
       );
       return res.json({ success: true, id: Number(inserted.rows[0].id) });
@@ -297,8 +403,11 @@ export function createOperationsRouter(pool, config, mailer) {
     try {
       const result = await pool.query(
         `UPDATE engagements SET sortie=$1, drone_id=$2, interceptor_id=$3, run_type=$4,
-           outcome=$5, time_to_intercept_s=$6, engagement_range_m=$7, altitude_m=$8, notes=$9
-         WHERE id=$10`,
+           outcome=$5, time_to_intercept_s=$6, engagement_range_m=$7, altitude_m=$8, notes=$9,
+           stage_reached=$10, test_profile_id=$11, detect_range_m=$12, detect_alt_m=$13,
+           track_continuity_pct=$14, track_error_m=$15, id_range_m=$16, id_time_s=$17,
+           identified_ok=$18
+         WHERE id=$19`,
         [
           payload.sortie,
           payload.droneId,
@@ -309,6 +418,7 @@ export function createOperationsRouter(pool, config, mailer) {
           payload.engagementRangeM,
           payload.altitudeM,
           payload.notes,
+          ...measureValues(payload),
           id,
         ]
       );

@@ -1,3 +1,5 @@
+import { isStageKey } from "./criteria.js";
+
 /**
  * Input validation. Every route validates request bodies through
  * these helpers so type handling stays consistent.
@@ -83,4 +85,71 @@ export function asIsoDate(value) {
 export function asId(value) {
   const parsed = Number.parseInt(String(value), 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+/**
+ * Kill chain stage reached on a run. Blank stays null rather than
+ * defaulting to a stage, so the derivation can label the result as
+ * inferred instead of presenting a guess as a measurement.
+ * @param {unknown} value
+ * @returns {string | null} A kill chain stage key, or null.
+ */
+export function asStage(value) {
+  return isStageKey(value) ? value : null;
+}
+
+/**
+ * Three-state boolean. Null means the scorer did not answer, which is
+ * different from answering no and must not collapse into it.
+ * @param {unknown} value
+ * @returns {boolean | null}
+ */
+export function asTriBoolean(value) {
+  if (value === true || value === "yes" || value === "true") {
+    return true;
+  }
+  if (value === false || value === "no" || value === "false") {
+    return false;
+  }
+  return null;
+}
+
+/**
+ * @param {unknown} value
+ * @param {number} max
+ * @returns {number | null} Non-negative integer within bounds, or null.
+ */
+export function asOptionalInteger(value, max) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const parsed = Number.parseInt(String(value), 10);
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > max) {
+    return null;
+  }
+  return parsed;
+}
+
+/**
+ * System profile answers keyed by catalog id. Unknown keys are dropped so
+ * a malformed client cannot grow the stored object without bound.
+ * @param {unknown} value
+ * @param {(id: string) => boolean} isKnownKey
+ * @returns {object} Sanitized answers.
+ */
+export function asProfile(value, isKnownKey) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  const clean = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (!isKnownKey(key)) {
+      continue;
+    }
+    const text = asText(raw, 2000);
+    if (text.length > 0) {
+      clean[key] = text;
+    }
+  }
+  return clean;
 }

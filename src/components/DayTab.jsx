@@ -7,10 +7,12 @@ import {
   listDays,
   openWor,
   reopenDay,
+  saveDayMetrics,
   updateDay,
 } from "../api.js";
 import { C, MONO, st } from "../styles.js";
 import { Field, Loading, Notice } from "./ui.jsx";
+import { DayMetricsCard } from "./DayMetricsCard.jsx";
 
 /**
  * Day tab. Admins set the location and coordinates that drive weather
@@ -24,6 +26,7 @@ export function DayTab({ isAdmin }) {
   const [stats, setStats] = useState(null);
   const [days, setDays] = useState([]);
   const [settings, setSettings] = useState(null);
+  const [metrics, setMetrics] = useState(null);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -41,6 +44,7 @@ export function DayTab({ isAdmin }) {
         longitude: String(current.day.longitude),
         weatherNote: current.day.weatherNote,
       });
+      setMetrics(current.day.metrics || {});
       setError("");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to load days.");
@@ -76,6 +80,25 @@ export function DayTab({ isAdmin }) {
       setError(err instanceof ApiError ? err.message : "Failed to save settings.");
     }
   }, [day, settings, reload]);
+
+  const setMetric = useCallback((key, value) => {
+    setMetrics((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  const saveMetrics = useCallback(async () => {
+    if (!day) {
+      return;
+    }
+    setStatus("");
+    setError("");
+    try {
+      await saveDayMetrics(day.id, metrics);
+      setStatus("Day measures saved.");
+      await reload();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to save day measures.");
+    }
+  }, [day, metrics, reload]);
 
   const done = useCallback(async () => {
     if (!day || busy) {
@@ -148,6 +171,10 @@ export function DayTab({ isAdmin }) {
           <button style={{ ...st.ghostBtn, width: "100%" }} onClick={saveSettings}>Save settings</button>
         </div>
       ) : null}
+
+      {metrics === null ? null : (
+        <DayMetricsCard metrics={metrics} onChange={setMetric} onSave={saveMetrics} />
+      )}
 
       {isAdmin ? (
         <div style={st.card}>

@@ -191,3 +191,68 @@ export function addFeedback(entry) {
 export function deleteFeedback(id) {
   return request("DELETE", `/feedback/${id}`);
 }
+
+/** @returns {Promise<{ catalog: object[], killChain: object[], groups: object[] }>} */
+export function getCriteriaCatalog() {
+  return request("GET", "/criteria/catalog");
+}
+
+/** @returns {Promise<{ benchmarks: object[] }>} */
+export function listBenchmarks() {
+  return request("GET", "/criteria/benchmarks");
+}
+
+/** @returns {Promise<object>} */
+export function saveBenchmark(benchmark) {
+  return request("PUT", "/criteria/benchmarks", benchmark);
+}
+
+/** @returns {Promise<object>} */
+export function deleteBenchmark(id) {
+  return request("DELETE", `/criteria/benchmarks/${id}`);
+}
+
+/**
+ * Asks the server what the public UAS group bands imply for each range
+ * benchmark. Nothing is stored by this call; the admin reviews the basis
+ * and chooses what to accept.
+ * @returns {Promise<{ derived: object[] }>}
+ */
+export function deriveBenchmarkDefaults(params) {
+  return request("POST", "/criteria/benchmarks/derive", params);
+}
+
+/** @returns {Promise<object>} */
+export function saveSystemProfile(interceptorId, profile) {
+  return request("PUT", `/interceptors/${interceptorId}/profile`, { profile });
+}
+
+/** @returns {Promise<object>} */
+export function saveDayMetrics(dayId, metrics) {
+  return request("PUT", `/days/${dayId}/metrics`, metrics);
+}
+
+/** @returns {Promise<{ mops: object[], compliance: object[], summary: object }>} */
+export function getDayCriteria(dayId) {
+  return request("GET", `/days/${dayId}/criteria`);
+}
+
+/** @returns {Promise<{ profiles: object[] }>} */
+export function listTestProfiles() {
+  return request("GET", "/test-profiles");
+}
+
+/** @returns {Promise<object>} */
+export function addTestProfile(profile) {
+  return request("POST", "/test-profiles", profile);
+}
+
+/** @returns {Promise<object>} */
+export function updateTestProfile(id, profile) {
+  return request("PUT", `/test-profiles/${id}`, profile);
+}
+
+/** @returns {Promise<object>} */
+export function deleteTestProfile(id) {
+  return request("DELETE", `/test-profiles/${id}`);
+}

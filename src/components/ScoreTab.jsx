@@ -6,11 +6,13 @@ import {
   getCurrentDay,
   listDrones,
   listInterceptors,
+  listTestProfiles,
   updateEngagement,
 } from "../api.js";
 import { useStopwatch } from "../hooks.js";
 import { C, MONO, st } from "../styles.js";
 import { Loading, Notice } from "./ui.jsx";
+import { AdvancedMeasures, OUTCOME_FOR_STAGE, StagePicker } from "./StagePicker.jsx";
 import { WeatherPanel } from "./WeatherPanel.jsx";
 
 /**
@@ -50,28 +52,70 @@ const EMPTY_FORM = Object.freeze({
   sortie: "",
   droneId: "",
   interceptorId: "",
+  testProfileId: "",
   runType: "red_air",
+  stageReached: "defeat",
   outcome: "success",
   timeToInterceptS: "",
   engagementRangeM: "",
   altitudeM: "",
+  detectRangeM: "",
+  detectAltM: "",
+  trackContinuityPct: "",
+  trackErrorM: "",
+  idRangeM: "",
+  idTimeS: "",
+  identifiedOk: "",
   notes: "",
 });
 
 /** @returns {object} Payload with blank numeric fields converted to null. */
 function toPayload(form) {
   const asNumber = (value) => (value === "" ? null : Number(value));
+  const abort = form.runType === "abort";
   return {
     sortie: form.sortie,
     droneId: form.droneId === "" ? null : Number(form.droneId),
     interceptorId: form.interceptorId === "" ? null : Number(form.interceptorId),
+    testProfileId: form.testProfileId === "" ? null : Number(form.testProfileId),
     runType: form.runType,
+    // An abort run tests the terminate command rather than the kill chain,
+    // so it carries no stage and must not be counted as a failure to detect.
+    stageReached: abort ? null : form.stageReached,
     outcome: form.outcome,
     timeToInterceptS: asNumber(form.timeToInterceptS),
     engagementRangeM: asNumber(form.engagementRangeM),
     altitudeM: asNumber(form.altitudeM),
+    detectRangeM: asNumber(form.detectRangeM),
+    detectAltM: asNumber(form.detectAltM),
+    trackContinuityPct: asNumber(form.trackContinuityPct),
+    trackErrorM: asNumber(form.trackErrorM),
+    idRangeM: asNumber(form.idRangeM),
+    idTimeS: asNumber(form.idTimeS),
+    identifiedOk: form.identifiedOk === "" ? null : form.identifiedOk,
     notes: form.notes,
   };
+}
+
+/** @returns {string} A stored numeric field rendered for a form input. */
+function formValue(value) {
+  return value === null || value === undefined ? "" : String(value);
+}
+
+/**
+ * @param {boolean | null} value
+ * @returns {string} "yes", "no", or "" for an unanswered field. Null must
+ *   not collapse into "no": not noting an identification is different from
+ *   recording that it was wrong, and MOP 2.1.4 depends on the difference.
+ */
+function identifiedOkToForm(value) {
+  if (value === true) {
+    return "yes";
+  }
+  if (value === false) {
+    return "no";
+  }
+  return "";
 }
 
 /** @param {{ isAdmin: boolean }} props */
@@ -81,6 +125,7 @@ export function ScoreTab({ isAdmin }) {
   const [stats, setStats] = useState(null);
   const [drones, setDrones] = useState([]);
   const [interceptors, setInterceptors] = useState([]);
+  const [testProfiles, setTestProfiles] = useState([]);
   const [form, setForm] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState("");
@@ -90,16 +135,18 @@ export function ScoreTab({ isAdmin }) {
 
   const reload = useCallback(async () => {
     try {
-      const [dayData, droneData, interceptorData] = await Promise.all([
+      const [dayData, droneData, interceptorData, profileData] = await Promise.all([
         getCurrentDay(),
         listDrones(),
         listInterceptors(),
+        listTestProfiles(),
       ]);
       setDay(dayData.day);
       setEngagements(dayData.engagements);
       setStats(dayData.stats);
       setDrones(droneData.drones);
       setInterceptors(interceptorData.interceptors);
+      setTestProfiles(profileData.profiles.filter((profile) => profile.active));
       setError("");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to load the day.");
@@ -112,8 +159,21 @@ export function ScoreTab({ isAdmin }) {
     reload();
   }, [reload]);
 
+  /**
+   * Setting the stage also sets the outcome. The two are not independent:
+   * a run that reached defeat is a success, one that reached engage is a
+   * miss, and one that stopped earlier was never an engagement. Coupling
+   * them keeps the outcome based Pk in section 5 of the report and the
+   * stage based Pk in MOP 3.1.2 in agreement on new data. The scorer can
+   * still override the outcome afterwards if a run does not fit.
+   */
   const setField = useCallback((key, value) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    setForm((prev) => {
+      if (key !== "stageReached") {
+        return { ...prev, [key]: value };
+      }
+      return { ...prev, stageReached: value, outcome: OUTCOME_FOR_STAGE[value] || prev.outcome };
+    });
   }, []);
 
   const resetForm = useCallback(() => {
@@ -150,11 +210,20 @@ export function ScoreTab({ isAdmin }) {
       sortie: engagement.sortie || "",
       droneId: engagement.droneId === null ? "" : String(engagement.droneId),
       interceptorId: engagement.interceptorId === null ? "" : String(engagement.interceptorId),
+      testProfileId: engagement.testProfileId === null ? "" : String(engagement.testProfileId),
       runType: engagement.runType || "red_air",
+      stageReached: engagement.stageReached || "defeat",
       outcome: engagement.outcome,
-      timeToInterceptS: engagement.timeToInterceptS === null ? "" : String(engagement.timeToInterceptS),
-      engagementRangeM: engagement.engagementRangeM === null ? "" : String(engagement.engagementRangeM),
-      altitudeM: engagement.altitudeM === null ? "" : String(engagement.altitudeM),
+      timeToInterceptS: formValue(engagement.timeToInterceptS),
+      engagementRangeM: formValue(engagement.engagementRangeM),
+      altitudeM: formValue(engagement.altitudeM),
+      detectRangeM: formValue(engagement.detectRangeM),
+      detectAltM: formValue(engagement.detectAltM),
+      trackContinuityPct: formValue(engagement.trackContinuityPct),
+      trackErrorM: formValue(engagement.trackErrorM),
+      idRangeM: formValue(engagement.idRangeM),
+      idTimeS: formValue(engagement.idTimeS),
+      identifiedOk: identifiedOkToForm(engagement.identifiedOk),
       notes: engagement.notes || "",
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -201,6 +270,7 @@ export function ScoreTab({ isAdmin }) {
           setField={setField}
           drones={drones}
           interceptors={interceptors}
+          testProfiles={testProfiles}
           editingId={editingId}
           busy={busy}
           stopwatch={stopwatch}
@@ -251,7 +321,7 @@ function DayStrip({ day, stats }) {
 
 /** The engagement entry form with the big outcome selector and stopwatch. */
 function EngagementForm(props) {
-  const { form, setField, drones, interceptors, editingId, busy, stopwatch } = props;
+  const { form, setField, drones, interceptors, testProfiles, editingId, busy, stopwatch } = props;
   const { onUseStopwatch, onSubmit, onCancel } = props;
   const droneOptions = useMemo(
     () => [{ id: "", name: "Select target drone" }, ...drones],
@@ -261,6 +331,17 @@ function EngagementForm(props) {
     () => [{ id: "", name: "Select interceptor" }, ...interceptors],
     [interceptors]
   );
+  const profileOptions = useMemo(
+    () => [
+      { id: "", label: "No matrix profile" },
+      ...testProfiles.map((profile) => ({
+        id: profile.id,
+        label: `${profile.code} - ${profile.mission || "Unspecified"} (${profile.timeOfDay})`,
+      })),
+    ],
+    [testProfiles]
+  );
+  const isAbort = form.runType === "abort";
   return (
     <div style={st.card}>
       <h2 style={st.secHead}>{editingId === null ? "Log Engagement" : "Edit Engagement"}</h2>
@@ -293,6 +374,22 @@ function EngagementForm(props) {
           ))}
         </select>
       </label>
+      {testProfiles.length > 0 ? (
+        <label style={st.field}>
+          <span style={st.label}>Test matrix profile</span>
+          <select
+            style={st.input}
+            value={form.testProfileId}
+            onChange={(e) => setField("testProfileId", e.target.value)}
+          >
+            {profileOptions.map((option) => (
+              <option key={option.id || "none"} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       <span style={st.label}>Run type</span>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
         {RUN_TYPES.map((option) => {
@@ -318,6 +415,12 @@ function EngagementForm(props) {
           );
         })}
       </div>
+      {isAbort ? null : (
+        <StagePicker value={form.stageReached} onChange={(key) => setField("stageReached", key)} />
+      )}
+      {isAbort ? null : (
+        <AdvancedMeasures form={form} setField={setField} stage={form.stageReached} />
+      )}
       <span style={st.label}>Outcome</span>
       <div style={{ ...st.outcomeRow, marginBottom: 14 }}>
         {outcomesFor(form.runType).map((option) => {
@@ -410,6 +513,27 @@ function EngagementLog({ engagements, isAdmin, onEdit, onDelete }) {
   );
 }
 
+/**
+ * @param {string} key
+ * @returns {string} A readable kill chain stage for the log line, so a
+ *   scorer can see at a glance which runs carry captured stage data and
+ *   which will be inferred on the report.
+ */
+function stageLabel(key) {
+  const found = KILL_CHAIN_LABELS[key];
+  return found ? `Stage: ${found}` : "";
+}
+
+const KILL_CHAIN_LABELS = Object.freeze({
+  none: "No Detect",
+  detect: "Detect",
+  track: "Track",
+  classify: "Classify",
+  identify: "Identify",
+  engage: "Engage",
+  defeat: "Defeat",
+});
+
 /** A single engagement line with outcome color and admin controls. */
 function EngagementRow({ engagement, isAdmin, onEdit, onDelete }) {
   const runType = engagement.runType || "red_air";
@@ -442,6 +566,7 @@ function EngagementRow({ engagement, isAdmin, onEdit, onDelete }) {
           </span>
         </div>
         <div style={{ ...st.meta, marginTop: 4 }}>
+          {engagement.stageReached ? `${stageLabel(engagement.stageReached)} | ` : ""}
           {engagement.sortie ? `${engagement.sortie} | ` : ""}
           {engagement.timeToInterceptS !== null ? `${engagement.timeToInterceptS}s | ` : ""}
           {engagement.engagementRangeM !== null ? `${engagement.engagementRangeM}m` : ""}

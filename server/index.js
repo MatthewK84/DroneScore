@@ -6,6 +6,7 @@ import { config } from "./config.js";
 import { createPool, migrate } from "./db.js";
 import { createMailer } from "./mailer.js";
 import { createCatalogRouter } from "./routes/catalog.js";
+import { createCriteriaRouter } from "./routes/criteria.js";
 import { createOperationsRouter } from "./routes/operations.js";
 import { createPublicRouter } from "./routes/public.js";
 import { createReadonlyRouter } from "./routes/readonly.js";
@@ -57,6 +58,7 @@ function buildApp(pool, mailer) {
   app.use("/api", createPublicRouter(pool, config));
   app.use("/api", createReadonlyRouter(pool, config));
   app.use("/api", createCatalogRouter(pool));
+  app.use("/api", createCriteriaRouter(pool, config));
   app.use("/api", createOperationsRouter(pool, config, mailer));
   app.use("/api", createSupportRouter(pool));
   app.use("/api", (_req, res) => {
