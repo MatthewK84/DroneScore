@@ -87,6 +87,18 @@ the terminate command rather than intercept performance.
 Status reads **OPEN** or **CLOSED**. Once closed, the scoring form disappears
 until an admin reopens the day.
 
+### C4 Scorecard, live
+
+Under the scoreboard, the Overall System Score out of 2 and the five Core
+Capability Area scores, refreshed every time you log a run. If a Critical KPP
+scores 0, the Not Militarily Effective banner appears here too.
+
+You do nothing to produce this. Logging an engagement is the only action
+involved: every criteria row that run bears on is measured, scored, and rolled
+up from that one action. The strip is here so you can see where the evaluation
+stands without leaving the tab you are scoring on; the Criteria tab has the
+full tables behind it.
+
 ### Weather panel
 
 Live conditions pulled from the National Weather Service, with a GO / CAUTION /
@@ -106,6 +118,12 @@ improves the report.
 appears if profiles have been defined. Leave it on *No matrix profile* if the
 run does not belong to one; unassigned runs are counted and named on the report
 rather than being quietly spread across profiles.
+
+**Scenario** — two buttons, MLCOA (most likely course of action) and MDCOA
+(most dangerous). This splits the engagement timeline on the Criteria tab into
+its two columns. It stays where you left it between runs, because a block of
+runs is flown under one course of action; you set it once when the block
+changes, not once per run.
 
 **Run type** — two buttons:
 - *Red Air Intercept* — a real intercept attempt. Counts toward Pk.
@@ -147,6 +165,10 @@ never identified.
 
 - Detect range (m) and Detect altitude (m AGL). Slant range is computed from
   these two, so it is never asked for.
+- Time to detect (s) and Time to decide / engage (s). These two, with ID time
+  below and the time to intercept on the main form, build the four phases of
+  the Engagement Timeline Analysis. A phase left blank is reported as not
+  captured, never as zero.
 - Track continuity (%) and Track error (m).
 - ID range (m) and ID time (s).
 - Identified correctly? — Yes / No / Not noted. **Not noted is not the same as
@@ -226,7 +248,7 @@ Tap **Save day measures**. Scorers can do this; it is not admin-gated.
 **Done for the Day** generates the report and locks scoring. Confirm the prompt
 and wait for the control number, e.g. `WOR-20260811-01`.
 
-Before you tap it, check **Criteria → Review**. Anything you can still fix at
+Before you tap it, check **Criteria → Scorecard**. Anything you can still fix at
 the range is fixable now and a finding afterwards.
 
 ### Past days
@@ -242,22 +264,68 @@ kept, not overwritten.
 ## 6. Criteria tab
 
 Four views along the top. This is where the Capability Characterization
-Criteria live.
+Criteria live, laid out as the consolidated JIATF 401 Common Criteria for
+CUAS Characterization (C4) document.
 
-### Review
+### Scorecard
 
-Read this before closing the day. It shows exactly what will print.
+The default view, and the criteria document itself: the five Core Capability
+Areas, every row each of them prints, in the document's order and with the
+document's columns.
 
-- **Compliance summary** — counts of Objective / Threshold / Short / No
-  benchmark, plus which system the compliance table is reported for.
-- **Per-criterion MOP results** — every measure with its value and its
-  **basis**. The basis is the part to read. `captured` means measured from
-  stage data. `inferred from outcome` means the run predates stage capture and
-  the value was back-filled from the outcome column — that is not a measurement
-  of that stage and should not be read as one. `mixed: 4 captured, 12 inferred`
-  tells you exactly how far along you are.
-- **KPP compliance** — defaults to showing only entries needing attention.
-  Toggle to see all 72.
+**Nothing on this screen asks you for a number.** The Measured column fills
+itself from the runs already logged on the Score tab. Logging an engagement
+scores every row that engagement bears on, and the score you see here is the
+score that prints.
+
+**Overall System Score** sits at the top, out of 2. It is the weighted average
+of the five Core Capability Areas at equal weight, and it counts only rows that
+actually carry a score. Underneath it the header states how many rows do not:
+how many have no Threshold or Objective stored, how many have no measurement
+yet, and how many are marked not applicable. That split matters — an area
+scoring 2.00 from one row out of twenty is not a passing area, it is one
+measured row.
+
+**Scoring**, from section 2 of the criteria:
+
+| Score | Means |
+|---|---|
+| 0 | Not Met — below Threshold |
+| 1 | Met Threshold |
+| 2 | Met or Exceeded Objective |
+| N/A | Not applicable to this interceptor configuration |
+
+A row with no score shows why instead: `No T/O` (no benchmark stored),
+`No data` (benchmarked but not yet measured), `Reported` (a specification the
+criteria do not score), or `N/A`. None of these count as a pass, and none
+enters the average.
+
+**Not Militarily Effective.** If a row marked Critical scores 0, a red banner
+names it and the system carries that flag. Which KPPs are Critical is the
+evaluator's call, made on the Benchmarks view when the Threshold and Objective
+are set. The application never guesses at criticality.
+
+**Mark N/A** (admin). Each row carries a *Mark N/A* button. Use it when a row
+genuinely does not apply to the interceptor configuration under test — a
+proximity fuse row on a hit-to-kill interceptor, say. The mark is stored on
+that system's profile, so it applies every day that system flies, and it takes
+the row out of the score rather than scoring it zero. *Restore* undoes it.
+
+**Supporting KPP Groups, Usability, and Mission Impact.** Sections 4 through 6
+of the criteria — Automation, C2, Survivability, Ancillary & Cost, Target
+Quality, operator usability (NASA-TLX, SAGAT, SUS), and mission impact and
+risk. Collapsed by default. These are reported in full but never fold into the
+Overall System Score, which the criteria define over the five Core Capability
+Areas alone.
+
+**Engagement Timeline Analysis.** Section 7. Mean seconds per phase across the
+day's intercept runs, split into MLCOA and MDCOA columns with the delta between
+them. Every figure comes from timings captured on the run form; a phase nobody
+timed is left blank rather than counted as zero, and the total says how many of
+the four phases it actually covers.
+
+Read this view before closing the day. A row showing `No T/O` is still fixable
+at the range. Once the report is generated it is a finding.
 
 ### System Profile (admin)
 
@@ -269,10 +337,19 @@ Yes/No controls have a third state, **Unanswered**, which is distinct from No.
 For the vulnerability entries (KSA 8.3 and its sub-items) and corrosion,
 answering *Yes* is the adverse finding — the report scores those inverted.
 
+The catalog also covers the Interceptor-Specific Metrics (INT-1 through
+INT-14), the Ancillary & Cost group, and the operator usability scores, so all
+of them are answered here once rather than asked for run by run.
+
 At the bottom, six narrative fields for the qualitative MOPs of Criteria 4 and
 5: co-located system impact, HERO/HERP/HERF, RMF compliance and ATO/ATC status,
 contested environment, hazard prevention, collateral damage mitigation. What
 you write prints verbatim in report section 8.
+
+Each of those six now carries a **scorecard verdict** beside it — Yes/No or
+Pass/Fail depending on the row. The narrative is the evidence; the verdict is
+what the scorecard scores. Leaving the verdict unanswered reports the row as
+having no data, which is not a pass.
 
 Tap **Save system profile**.
 
@@ -303,6 +380,17 @@ What comes back is split in two, deliberately:
 > **Set the cycle time from your own timing data, not an estimate.** Every range
 > benchmark scales linearly with it. Ten seconds of optimism moves each Group 1
 > range benchmark by roughly 515 m.
+
+**Set a Benchmark.** Below the derivation helper, a form for storing a
+Threshold and Objective on any row of the scorecard by hand — including the
+MOP rows, the interceptor-specific metrics, and the supporting groups, none of
+which the derivation helper covers. Enter the limits, the unit, and the basis;
+the basis prints on the report, so write where the numbers came from.
+
+The same form carries the **Critical KPP** toggle. A Critical KPP scoring 0
+flags the whole system Not Militarily Effective on the scorecard and on the
+report. The criteria do not say which KPPs are critical, so nothing is marked
+critical until an evaluator marks it here.
 
 Stored benchmarks are listed below with their scope. A benchmark can apply to
 all systems and all groups, to one system, to one group, or to a specific

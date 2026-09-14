@@ -288,3 +288,102 @@ export function deriveMops(engagements, day, profile) {
 export function flattenMops(groups) {
   return groups.flatMap((group) => group.results);
 }
+
+/**
+ * Engagement timeline phases, section 7 of the consolidated criteria. Each
+ * phase names the run column that measures it, so the timeline is derived
+ * from runs the scorer already logged rather than asked for separately.
+ */
+const TIMELINE_PHASES = Object.freeze([
+  { phase: "Time to Detect", field: "detect_time_s" },
+  { phase: "Time to Track / Classify / ID", field: "id_time_s" },
+  { phase: "Time to Decide / Engage", field: "decide_time_s" },
+  { phase: "Time to Effect / Defeat", field: "time_to_intercept_s" },
+]);
+
+/** Scenario keys the criteria name for the timeline comparison. */
+export const SCENARIOS = Object.freeze([
+  { key: "mlcoa", label: "MLCOA", hint: "Most Likely Course of Action" },
+  { key: "mdcoa", label: "MDCOA", hint: "Most Dangerous Course of Action" },
+]);
+
+const SCENARIO_KEYS = Object.freeze(SCENARIOS.map((entry) => entry.key));
+
+/** @returns {boolean} True when the value names a scenario. */
+export function isScenarioKey(value) {
+  return typeof value === "string" && SCENARIO_KEYS.includes(value);
+}
+
+/** @returns {string} The scenario a row belongs to, defaulting to MLCOA. */
+function scenarioOf(row) {
+  return isScenarioKey(row.scenario) ? row.scenario : "mlcoa";
+}
+
+/** @returns {number | null} Mean of a timing column, to one decimal. */
+function meanOf(rows, field) {
+  const values = column(rows, field);
+  if (values.length === 0) {
+    return null;
+  }
+  const total = values.reduce((sum, value) => sum + value, 0);
+  return Math.round((total / values.length) * 10) / 10;
+}
+
+/** @returns {number | null} Difference between two phase times. */
+function deltaOf(mlcoa, mdcoa) {
+  if (mlcoa === null || mdcoa === null) {
+    return null;
+  }
+  return Math.round((mdcoa - mlcoa) * 10) / 10;
+}
+
+/** @returns {number | null} Sum of the phase times that were captured. */
+function totalOf(phases, key) {
+  const values = phases.map((entry) => entry[key]).filter((value) => value !== null);
+  if (values.length === 0) {
+    return null;
+  }
+  return Math.round(values.reduce((sum, value) => sum + value, 0) * 10) / 10;
+}
+
+/**
+ * Derives the engagement timeline, section 7. Phases with no captured
+ * timing report null rather than zero, and the total states how many of
+ * the four phases it covers, because a total built from two phases is not
+ * a total engagement time and must not print as one.
+ *
+ * @param {object[]} engagements Rows for one operational day.
+ * @returns {{ phases: object[], total: object }}
+ */
+export function deriveTimeline(engagements) {
+  const rows = engagements.filter((row) => row.run_type !== "abort");
+  const mlcoaRows = rows.filter((row) => scenarioOf(row) === "mlcoa");
+  const mdcoaRows = rows.filter((row) => scenarioOf(row) === "mdcoa");
+  const phases = TIMELINE_PHASES.map((entry) => {
+    const mlcoa = meanOf(mlcoaRows, entry.field);
+    const mdcoa = meanOf(mdcoaRows, entry.field);
+    return {
+      phase: entry.phase,
+      mlcoa,
+      mdcoa,
+      delta: deltaOf(mlcoa, mdcoa),
+      n: { mlcoa: column(mlcoaRows, entry.field).length, mdcoa: column(mdcoaRows, entry.field).length },
+    };
+  });
+  const mlcoaTotal = totalOf(phases, "mlcoa");
+  const mdcoaTotal = totalOf(phases, "mdcoa");
+  return {
+    phases,
+    total: {
+      phase: "Total Engagement Time",
+      mlcoa: mlcoaTotal,
+      mdcoa: mdcoaTotal,
+      delta: deltaOf(mlcoaTotal, mdcoaTotal),
+      coveredPhases: {
+        mlcoa: phases.filter((entry) => entry.mlcoa !== null).length,
+        mdcoa: phases.filter((entry) => entry.mdcoa !== null).length,
+      },
+      phaseCount: TIMELINE_PHASES.length,
+    },
+  };
+}

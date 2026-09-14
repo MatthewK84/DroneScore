@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiError, deriveBenchmarkDefaults, listBenchmarks, saveBenchmark } from "../api.js";
 import { C, MONO, st } from "../styles.js";
 import { Loading, Notice } from "./ui.jsx";
@@ -23,6 +23,50 @@ const EMPTY_INPUTS = Object.freeze({
   cycleS: "30",
   launchToDefeatS: "10",
 });
+
+/** A blank manual benchmark entry. */
+const EMPTY_MANUAL = Object.freeze({
+  rowId: "",
+  uasGroup: "",
+  threshold: "",
+  objective: "",
+  unit: "",
+  basis: "",
+  critical: false,
+});
+
+/**
+ * Every row a Threshold and Objective can be stored against: the scorecard
+ * rows of the five Core Capability Areas first, in criteria order, then the
+ * catalog entries that only appear in the supporting groups.
+ *
+ * @param {object} catalog Criteria catalog response.
+ * @returns {{ id: string, label: string, units: string }[]}
+ */
+function benchmarkableRows(catalog) {
+  const seen = new Set();
+  const options = [];
+  for (const area of catalog.areas || []) {
+    for (const section of area.sections) {
+      for (const row of section.rows) {
+        if (seen.has(row.id)) {
+          continue;
+        }
+        seen.add(row.id);
+        const label = row.kind === "INT" ? row.id : `${row.kind} ${row.id}`;
+        options.push({ id: row.id, label: `${label} - ${row.measure}`, units: row.units });
+      }
+    }
+  }
+  for (const entry of catalog.catalog || []) {
+    if (seen.has(entry.id)) {
+      continue;
+    }
+    seen.add(entry.id);
+    options.push({ id: entry.id, label: `${entry.label} - ${entry.measure}`, units: entry.units });
+  }
+  return options;
+}
 
 /** @returns {string} A short label for the benchmark scope columns. */
 function scopeLabel(benchmark, interceptors) {
@@ -131,6 +175,8 @@ export function BenchmarksPanel({ catalog, interceptors, isAdmin }) {
         <DerivedList entries={derived} onAccept={accept} busy={busy} isAdmin={isAdmin} />
       ) : null}
 
+      {isAdmin ? <ManualCard catalog={catalog} busy={busy} onSaved={reload} onError={setError} onStatus={setStatus} /> : null}
+
       <StoredList benchmarks={benchmarks} interceptors={interceptors} />
 
       {error ? <p style={st.error}>{error}</p> : null}
@@ -221,6 +267,128 @@ function DerivedList({ entries, onAccept, busy, isAdmin }) {
   );
 }
 
+
+/**
+ * Manual entry for the Threshold, Objective, and Critical mark on any
+ * scorecard row. The criteria require both limits to be documented before
+ * test execution, and they flag a system "Not Militarily Effective" when a
+ * Critical KPP scores 0 without saying which KPPs are critical. That call
+ * belongs to the evaluator, so it is made here, beside the limits, and is
+ * never inferred from the measure's name.
+ */
+function ManualCard({ catalog, busy, onSaved, onError, onStatus }) {
+  const [entry, setEntry] = useState(EMPTY_MANUAL);
+  const [saving, setSaving] = useState(false);
+  const options = useMemo(() => benchmarkableRows(catalog), [catalog]);
+
+  const setField = useCallback((key, value) => {
+    setEntry((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  const submit = useCallback(async () => {
+    if (entry.rowId === "" || saving || busy) {
+      return;
+    }
+    setSaving(true);
+    onError("");
+    try {
+      await saveBenchmark({
+        kppId: entry.rowId,
+        interceptorId: null,
+        uasGroup: entry.uasGroup,
+        threshold: entry.threshold === "" ? null : Number(entry.threshold),
+        objective: entry.objective === "" ? null : Number(entry.objective),
+        unit: entry.unit,
+        basis: entry.basis,
+        critical: entry.critical,
+      });
+      onStatus(`Stored ${entry.rowId}.`);
+      setEntry(EMPTY_MANUAL);
+      await onSaved();
+    } catch (err) {
+      onError(err instanceof ApiError ? err.message : "Failed to store the benchmark.");
+    } finally {
+      setSaving(false);
+    }
+  }, [entry, saving, busy, onSaved, onError, onStatus]);
+
+  const selected = options.find((option) => option.id === entry.rowId) || null;
+  return (
+    <div style={st.card}>
+      <h2 style={st.secHead}>Set a Benchmark</h2>
+      <p style={{ ...st.meta, marginBottom: 12 }}>
+        Any row of the scorecard, including the interceptor-specific metrics and the
+        supporting groups. A row with neither limit stored is reported as having no
+        benchmark and stays out of the score.
+      </p>
+      <label style={st.field}>
+        <span style={st.label}>Row</span>
+        <select style={st.input} value={entry.rowId} onChange={(e) => setField("rowId", e.target.value)}>
+          <option value="">Select a row</option>
+          {options.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div style={st.grid2}>
+        <label style={st.field}>
+          <span style={st.label}>Threshold</span>
+          <input style={st.input} type="number" inputMode="decimal" value={entry.threshold} onChange={(e) => setField("threshold", e.target.value)} />
+        </label>
+        <label style={st.field}>
+          <span style={st.label}>Objective</span>
+          <input style={st.input} type="number" inputMode="decimal" value={entry.objective} onChange={(e) => setField("objective", e.target.value)} />
+        </label>
+      </div>
+      <div style={st.grid2}>
+        <label style={st.field}>
+          <span style={st.label}>Unit</span>
+          <input style={st.input} value={entry.unit} placeholder={selected ? selected.units : ""} onChange={(e) => setField("unit", e.target.value)} />
+        </label>
+        <label style={st.field}>
+          <span style={st.label}>UAS group (blank for all)</span>
+          <input style={st.input} value={entry.uasGroup} placeholder="1" onChange={(e) => setField("uasGroup", e.target.value)} />
+        </label>
+      </div>
+      <label style={st.field}>
+        <span style={st.label}>Basis</span>
+        <textarea
+          style={{ ...st.input, minHeight: 72, resize: "vertical", paddingTop: 10 }}
+          value={entry.basis}
+          placeholder="Where these numbers come from. This prints on the report."
+          onChange={(e) => setField("basis", e.target.value)}
+        />
+      </label>
+      <button
+        onClick={() => setField("critical", !entry.critical)}
+        style={{
+          ...st.outcomeBtn,
+          width: "100%",
+          minHeight: 46,
+          marginBottom: 12,
+          borderColor: entry.critical ? C.orange : C.line,
+          color: entry.critical ? C.orange : C.inkMuted,
+          background: entry.critical ? `${C.orange}12` : C.panel,
+        }}
+      >
+        {entry.critical ? "Critical KPP" : "Not a Critical KPP"}
+      </button>
+      <p style={{ ...st.meta, marginTop: -6, marginBottom: 12 }}>
+        A Critical KPP scoring 0 flags the whole system Not Militarily Effective.
+      </p>
+      <button
+        style={{ ...st.priBtn, width: "100%", opacity: saving || entry.rowId === "" ? 0.6 : 1 }}
+        disabled={saving || entry.rowId === ""}
+        onClick={submit}
+      >
+        Store benchmark
+      </button>
+    </div>
+  );
+}
+
 /** The benchmarks already stored against the evaluation. */
 function StoredList({ benchmarks, interceptors }) {
   if (benchmarks.length === 0) {
@@ -237,7 +405,12 @@ function StoredList({ benchmarks, interceptors }) {
       {benchmarks.map((benchmark) => (
         <div key={benchmark.id} style={st.rowItem}>
           <div>
-            <strong style={{ fontFamily: MONO, fontSize: 14 }}>KPP {benchmark.kppId}</strong>
+            <strong style={{ fontFamily: MONO, fontSize: 14 }}>{benchmark.kppId}</strong>
+            {benchmark.critical ? (
+              <span style={{ fontFamily: MONO, fontSize: 10, color: C.orange, marginLeft: 8, letterSpacing: "0.06em" }}>
+                CRITICAL
+              </span>
+            ) : null}
             <div style={{ ...st.meta, marginTop: 2 }}>{scopeLabel(benchmark, interceptors)}</div>
             <div style={{ fontFamily: MONO, fontSize: 12, color: C.olive, marginTop: 2 }}>
               T {benchmark.threshold ?? "--"} / O {benchmark.objective ?? "--"} {benchmark.unit}

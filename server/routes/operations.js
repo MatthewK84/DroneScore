@@ -7,6 +7,7 @@ import {
   asOptionalNumber,
   asOutcome,
   asRunType,
+  asScenario,
   asStage,
   asText,
   asTriBoolean,
@@ -75,6 +76,9 @@ function engagementToApi(row) {
     idRangeM: numberOrNull(row.id_range_m),
     idTimeS: numberOrNull(row.id_time_s),
     identifiedOk: row.identified_ok === null ? null : Boolean(row.identified_ok),
+    scenario: row.scenario || "mlcoa",
+    detectTimeS: numberOrNull(row.detect_time_s),
+    decideTimeS: numberOrNull(row.decide_time_s),
   };
 }
 
@@ -154,6 +158,9 @@ function parseEngagement(body) {
     idRangeM: asOptionalNumber(body?.idRangeM, 0, 1000000),
     idTimeS: asOptionalNumber(body?.idTimeS, 0, 86400),
     identifiedOk: asTriBoolean(body?.identifiedOk),
+    scenario: asScenario(body?.scenario),
+    detectTimeS: asOptionalNumber(body?.detectTimeS, 0, 86400),
+    decideTimeS: asOptionalNumber(body?.decideTimeS, 0, 86400),
   };
 }
 
@@ -168,6 +175,9 @@ const MEASURE_COLUMNS = Object.freeze([
   "idRangeM",
   "idTimeS",
   "identifiedOk",
+  "scenario",
+  "detectTimeS",
+  "decideTimeS",
 ]);
 
 /** @returns {unknown[]} Advanced measure values in column order. */
@@ -369,9 +379,11 @@ export function createOperationsRouter(pool, config, mailer) {
            (day_id, sortie, drone_id, interceptor_id, run_type, outcome,
             time_to_intercept_s, engagement_range_m, altitude_m, notes, weather,
             stage_reached, test_profile_id, detect_range_m, detect_alt_m,
-            track_continuity_pct, track_error_m, id_range_m, id_time_s, identified_ok)
+            track_continuity_pct, track_error_m, id_range_m, id_time_s, identified_ok,
+            scenario, detect_time_s, decide_time_s)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-                 $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING id`,
+                 $12, $13, $14, $15, $16, $17, $18, $19, $20,
+                 $21, $22, $23) RETURNING id`,
         [
           day.id,
           payload.sortie,
@@ -406,8 +418,8 @@ export function createOperationsRouter(pool, config, mailer) {
            outcome=$5, time_to_intercept_s=$6, engagement_range_m=$7, altitude_m=$8, notes=$9,
            stage_reached=$10, test_profile_id=$11, detect_range_m=$12, detect_alt_m=$13,
            track_continuity_pct=$14, track_error_m=$15, id_range_m=$16, id_time_s=$17,
-           identified_ok=$18
-         WHERE id=$19`,
+           identified_ok=$18, scenario=$19, detect_time_s=$20, decide_time_s=$21
+         WHERE id=$22`,
         [
           payload.sortie,
           payload.droneId,

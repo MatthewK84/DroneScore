@@ -1,4 +1,4 @@
-import { isStageKey } from "./criteria.js";
+import { isScenarioKey, isStageKey } from "./criteria.js";
 
 /**
  * Input validation. Every route validates request bodies through
@@ -96,6 +96,17 @@ export function asId(value) {
  */
 export function asStage(value) {
   return isStageKey(value) ? value : null;
+}
+
+/**
+ * Scenario a run was flown under. An unrecognized value falls back to
+ * MLCOA rather than null, because the engagement timeline splits every run
+ * into one column or the other and has no third column to put it in.
+ * @param {unknown} value
+ * @returns {string} "mlcoa" or "mdcoa".
+ */
+export function asScenario(value) {
+  return isScenarioKey(value) ? value : "mlcoa";
 }
 
 /**

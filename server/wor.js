@@ -6,6 +6,8 @@ import {
   buildComplianceSection,
   buildCriteriaSection,
   buildMatrixSection,
+  buildScorecardSection,
+  buildTimelineSection,
 } from "./wor-criteria.js";
 
 /**
@@ -395,6 +397,11 @@ function buildDocDefinition(input) {
       ...buildMatrixSection(input.criteria),
       heading(11, "Benchmark Basis"),
       ...buildBasisSection(input.criteria),
+      { text: "", pageBreak: "before" },
+      heading(12, "C4 Scorecard: Core Capability Areas"),
+      ...buildScorecardSection(input.criteria),
+      heading(13, "Engagement Timeline Analysis"),
+      ...buildTimelineSection(input.criteria),
     ],
   };
 }

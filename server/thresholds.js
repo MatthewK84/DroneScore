@@ -50,8 +50,33 @@ const GROUP_SOURCE =
 const METRES_PER_KT_SECOND = 0.514444;
 const FEET_PER_METRE = 3.28084;
 
-/** KPPs where a smaller measured value is the better result. */
-const LOWER_IS_BETTER = Object.freeze(["2.2", "5.8", "6.1", "6.3", "7.3"]);
+/**
+ * KPPs where a smaller measured value is the better result. Cost, weight,
+ * crew size, error, and elapsed time all improve as they fall; the NASA-TLX
+ * subscales run the same way, where 100 is the heaviest workload.
+ */
+const LOWER_IS_BETTER = Object.freeze([
+  "2.2",
+  "5.8",
+  "6.1",
+  "6.3",
+  "7.3",
+  "INT-6",
+  "INT-11",
+  "9.2",
+  "9.3",
+  "9.4",
+  "9.5",
+  "9.6",
+  "9.7",
+  "10.1",
+  "10.1a",
+  "10.1b",
+  "10.1c",
+  "10.1d",
+  "10.1e",
+  "10.1f",
+]);
 
 /** Y/N KPPs where an answer of yes is the adverse finding. */
 const YES_IS_ADVERSE = Object.freeze(["8.3", "8.3a", "8.3b", "8.3c", "8.6"]);

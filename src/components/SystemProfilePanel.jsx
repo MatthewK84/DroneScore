@@ -13,15 +13,34 @@ import { Notice } from "./ui.jsx";
  * the reason the catalog is data and not a set of columns.
  */
 
-/** Narrative MOPs from Criteria 4 and 5 that live beside the KPP answers. */
+/**
+ * Narrative MOPs from Criteria 4 and 5 that live beside the KPP answers.
+ * The criteria score each of these Y/N or Pass/Fail, so the verdict is
+ * captured next to the narrative rather than read out of it: a paragraph
+ * of prose is evidence, and a scorecard cannot score prose.
+ */
 const NARRATIVE_MOPS = Object.freeze([
-  { key: "mop.4.1.1", label: "MOP 4.1.1 Impact on Co-located Systems", hint: "Frequency, power, and modalities, and how these affect nearby systems." },
-  { key: "mop.4.1.2", label: "MOP 4.1.2 HERO / HERP / HERF", hint: "Hazard of electromagnetic radiation to ordnance, personnel, and fuel." },
-  { key: "mop.5.1.1", label: "MOP 5.1.1 RMF Compliance", hint: "ATO and ATC status, with dates and control numbers." },
-  { key: "mop.5.2.1", label: "MOP 5.2.1 Contested Environment", hint: "Observed degradation under threat electronic warfare." },
-  { key: "mop.5.3.1", label: "MOP 5.3.1 Hazard Prevention", hint: "Musculoskeletal, noise, radiation, and chemical risk controls." },
-  { key: "mop.5.3.2", label: "MOP 5.3.2 Collateral Damage Mitigation", hint: "Restricted firing sector exchange with the C2 system." },
+  { key: "mop.4.1.1", verdict: "passfail", label: "MOP 4.1.1 Impact on Co-located Systems", hint: "Frequency, power, and modalities, and how these affect nearby systems." },
+  { key: "mop.4.1.2", verdict: "passfail", label: "MOP 4.1.2 HERO / HERP / HERF", hint: "Hazard of electromagnetic radiation to ordnance, personnel, and fuel." },
+  { key: "mop.5.1.1", verdict: "yesno", label: "MOP 5.1.1 RMF Compliance", hint: "ATO and ATC status, with dates and control numbers." },
+  { key: "mop.5.2.1", verdict: "yesno", label: "MOP 5.2.1 Contested Environment", hint: "Observed degradation under threat electronic warfare." },
+  { key: "mop.5.3.1", verdict: "passfail", label: "MOP 5.3.1 Hazard Prevention", hint: "Musculoskeletal, noise, radiation, and chemical risk controls." },
+  { key: "mop.5.3.2", verdict: "yesno", label: "MOP 5.3.2 Collateral Damage Mitigation", hint: "Restricted firing sector exchange with the C2 system." },
 ]);
+
+/** Verdict options per narrative MOP type. Unanswered is never the same as a fail. */
+const VERDICT_OPTIONS = Object.freeze({
+  yesno: [
+    { key: "yes", text: "Yes", color: C.success },
+    { key: "no", text: "No", color: C.miss },
+    { key: "", text: "Unanswered", color: C.inkMuted },
+  ],
+  passfail: [
+    { key: "pass", text: "Pass", color: C.success },
+    { key: "fail", text: "Fail", color: C.miss },
+    { key: "", text: "Unanswered", color: C.inkMuted },
+  ],
+});
 
 /** @returns {number} Answered fields across the catalog and narrative MOPs. */
 function countAnswered(profile) {
@@ -172,11 +191,11 @@ function CatalogControl({ entry, value, onChange, disabled }) {
 
 /** A yes / no / unanswered control. Unanswered is never the same as no. */
 function YesNo({ value, onChange, disabled }) {
-  const options = [
-    { key: "yes", text: "Yes", color: C.success },
-    { key: "no", text: "No", color: C.miss },
-    { key: "", text: "Unanswered", color: C.inkMuted },
-  ];
+  return <Choice options={VERDICT_OPTIONS.yesno} value={value} onChange={onChange} disabled={disabled} />;
+}
+
+/** @returns {JSX.Element} A row of mutually exclusive answer buttons. */
+function Choice({ options, value, onChange, disabled }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
       {options.map((option) => (
@@ -207,21 +226,37 @@ function NarrativeCard({ profile, onAnswer, disabled }) {
     <div style={st.card}>
       <h2 style={st.secHead}>Criteria 4 and 5 Narrative</h2>
       <p style={{ ...st.meta, marginBottom: 12, fontFamily: MONO }}>
-        These MOPs are stated rather than measured. What is written here prints verbatim
-        in section 8 of the report.
+        These MOPs are stated rather than measured. The text prints verbatim in the
+        report; the verdict beside it is what the scorecard scores, and leaving it
+        unanswered reports the row as having no data rather than as a pass.
       </p>
       {NARRATIVE_MOPS.map((item) => (
-        <label key={item.key} style={st.field}>
-          <span style={st.label}>{item.label}</span>
-          <p style={{ ...st.meta, marginTop: 0, marginBottom: 6 }}>{item.hint}</p>
-          <textarea
-            style={{ ...st.input, minHeight: 72, resize: "vertical", paddingTop: 10 }}
-            value={profile[item.key] || ""}
-            disabled={disabled}
-            onChange={(event) => onAnswer(item.key, event.target.value)}
-          />
-        </label>
+        <NarrativeField key={item.key} item={item} profile={profile} onAnswer={onAnswer} disabled={disabled} />
       ))}
+    </div>
+  );
+}
+
+/** One narrative MOP: the evidence text and the verdict the scorecard scores. */
+function NarrativeField({ item, profile, onAnswer, disabled }) {
+  const verdictKey = `${item.key}.verdict`;
+  return (
+    <div style={st.field}>
+      <span style={st.label}>{item.label}</span>
+      <p style={{ ...st.meta, marginTop: 0, marginBottom: 6 }}>{item.hint}</p>
+      <textarea
+        style={{ ...st.input, minHeight: 72, resize: "vertical", paddingTop: 10 }}
+        value={profile[item.key] || ""}
+        disabled={disabled}
+        onChange={(event) => onAnswer(item.key, event.target.value)}
+      />
+      <span style={{ ...st.label, marginTop: 10 }}>Scorecard verdict</span>
+      <Choice
+        options={VERDICT_OPTIONS[item.verdict]}
+        value={profile[verdictKey] || ""}
+        onChange={(value) => onAnswer(verdictKey, value)}
+        disabled={disabled}
+      />
     </div>
   );
 }

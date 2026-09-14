@@ -45,8 +45,10 @@ viewer role regardless of which link is used.
 
 - **Conditions** (board) Range weather and a GO / CAUTION / NO-FLY estimate
   per UAS Group.
-- **Score** Scoreboard for today, engagement form with a stopwatch, and the
-  day's log.
+- **Score** Scoreboard for today, the live C4 scorecard, engagement form with
+  a stopwatch, and the day's log.
+- **Criteria** The consolidated C4 criteria scored live, the system profile,
+  the Threshold and Objective benchmarks, and the test matrix.
 - **Fleet** Target drones and interceptor platforms.
 - **Day** Day settings, the "Done for the Day" closeout, and past reports.
 - **Schedule** Event agenda stored in the database.
@@ -258,6 +260,10 @@ Each service: React SPA + Express (server/)
   /api/public/*   read-only mirror and conditions (viewer and up)
   weather.js      National Weather Service client
   conditions.js   DoD-threshold flying-conditions estimator
+  criteria.js     MOP derivation and engagement timeline from logged runs
+  kpp-catalog.js  the KPP, KSA, and interceptor-metric catalog, data only
+  c4.js           the C4 scorecard structure, as the criteria print it
+  c4-score.js     0/1/2/NA scoring, area rollup, Critical KPP flag
   wor.js          pdfmake vector report builder
 ```
 
@@ -281,6 +287,16 @@ The database schema is created at boot; there is no separate migration step.
 - Weather is captured per run and summarized in the report. If the weather
   service is briefly unreachable, scoring still proceeds and the app serves
   the last good reading, marked stale, so the board never blanks.
+- Criteria scoring follows the runs, not a second round of data entry. Every
+  Measured value on the scorecard comes from a derived MOP, an operational-day
+  closeout counter, or the system profile, in that order. A row with no
+  Threshold and Objective stored, or no measurement yet, is reported in that
+  state and kept out of the score: averaging over rows that were never
+  benchmarked would let an evaluation raise its score by measuring less.
+- The criteria flag a system "Not Militarily Effective" when a Critical KPP
+  scores 0, but do not say which KPPs are critical. That is declared by the
+  evaluator on the benchmark record, beside the Threshold and Objective, and is
+  never inferred from a measure's name.
 - Closing a day runs in a single transaction that locks the day row, so the
   report sequence number cannot collide. Closing writes a numbered report
   (`WOR-YYYYMMDD-NN`). An admin can reopen a day; the next closeout writes the

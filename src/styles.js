@@ -272,4 +272,48 @@ export const st = Object.freeze({
     fontSize: 13,
     marginTop: 8,
   },
+
+  // The criteria tables print nine columns. They are reproduced as tables
+  // rather than reflowed into cards because the evaluation reads them
+  // against the source document, so the wrapper scrolls sideways on a
+  // phone instead of the columns rearranging themselves.
+  tableWrap: {
+    overflowX: "auto",
+    marginBottom: 6,
+    WebkitOverflowScrolling: "touch",
+  },
+  table: {
+    borderCollapse: "collapse",
+    width: "100%",
+    minWidth: 660,
+    fontSize: 12,
+  },
+  th: {
+    fontFamily: MONO,
+    fontSize: 10,
+    fontWeight: 600,
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    color: C.inkMuted,
+    background: C.oliveSoft,
+    textAlign: "left",
+    padding: "6px 6px",
+    borderBottom: `1px solid ${C.line}`,
+    whiteSpace: "nowrap",
+  },
+  td: {
+    padding: "7px 6px",
+    borderBottom: `1px solid ${C.line}`,
+    verticalAlign: "top",
+    color: C.ink,
+  },
+  tdMono: {
+    padding: "7px 6px",
+    borderBottom: `1px solid ${C.line}`,
+    verticalAlign: "top",
+    fontFamily: MONO,
+    fontSize: 11,
+    color: C.ink,
+    whiteSpace: "nowrap",
+  },
 });

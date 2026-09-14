@@ -96,6 +96,15 @@ const SCHEMA_STATEMENTS = [
   `ALTER TABLE engagements ADD COLUMN IF NOT EXISTS identified_ok BOOLEAN`,
   `ALTER TABLE engagements ADD COLUMN IF NOT EXISTS test_profile_id BIGINT`,
 
+  // JIATF 401 Common Criteria for CUAS Characterization, sections 2 and 7.
+  // Every entry carries the scenario it was flown under, and the engagement
+  // timeline needs the two phase timings the run form did not already hold.
+  // Existing rows default to MLCOA because that is what a run logged without
+  // a stated scenario was: the expected case, not the dangerous one.
+  `ALTER TABLE engagements ADD COLUMN IF NOT EXISTS scenario TEXT NOT NULL DEFAULT 'mlcoa'`,
+  `ALTER TABLE engagements ADD COLUMN IF NOT EXISTS detect_time_s NUMERIC`,
+  `ALTER TABLE engagements ADD COLUMN IF NOT EXISTS decide_time_s NUMERIC`,
+
   // Operational-day counters. These feed MOP 1.1.4 false alarm rate,
   // MOP 4.2.1 mean time between system abort, MOP 4.2.2 mean time to
   // repair, and KPP 6.1 and 6.3 workload.
@@ -130,6 +139,12 @@ const SCHEMA_STATEMENTS = [
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_benchmarks_key
      ON benchmarks (COALESCE(interceptor_id, 0), kpp_id, uas_group)`,
+
+  // Section 2 of the consolidated criteria flags a system "Not Militarily
+  // Effective" when a Critical KPP scores 0, but does not say which KPPs are
+  // critical. The evaluator declares that here, alongside the Threshold and
+  // Objective, which is when the criteria say the decision is made.
+  `ALTER TABLE benchmarks ADD COLUMN IF NOT EXISTS critical BOOLEAN NOT NULL DEFAULT false`,
 
   // Test matrix. A profile is one row block of the matrix: a mission type
   // flown at a time of day for a required number of data points. Its targets

@@ -323,3 +323,164 @@ export function buildBasisSection(criteria) {
   }
   return blocks;
 }
+
+/** Ink color for a 0/1/2 score, matched to the compliance verdict colors. */
+const SCORE_COLORS = Object.freeze({ 0: "#B3261E", 1: "#3E4A2E", 2: "#2E7D32" });
+
+/** Labels for the scorecard states that carry no score. */
+const STATE_LABELS = Object.freeze({
+  not_applicable: "N/A",
+  reported: "Reported",
+  no_benchmark: "No T/O",
+  not_measured: "No data",
+});
+
+/** @returns {object} The Score cell for one scorecard row. */
+function scoreCell(row) {
+  if (row.state !== "scored") {
+    return { text: STATE_LABELS[row.state] || "--", color: "#5A6355" };
+  }
+  return { text: String(row.score), bold: true, color: SCORE_COLORS[row.score] || INK };
+}
+
+/** @returns {string} A benchmark limit rendered for the page. */
+function scoreLimit(value) {
+  return value === null || value === undefined ? "--" : String(value);
+}
+
+/** @returns {object} One Core Capability Area table. */
+function areaTable(section) {
+  const body = section.rows.map((row) => [
+    { text: row.label, bold: true },
+    row.measure,
+    row.units,
+    row.measuredText || "--",
+    scoreLimit(row.threshold),
+    scoreLimit(row.objective),
+    scoreCell(row),
+  ]);
+  return {
+    table: {
+      headerRows: 1,
+      widths: [46, "*", 40, 70, 34, 34, 40],
+      body: [headerRow(["ID", "MOP / KPP", "Unit", "Measured", "Thresh.", "Obj.", "Score"]), ...body],
+    },
+    layout: tableLayout(),
+    fontSize: 7,
+    margin: [0, 0, 0, 8],
+  };
+}
+
+/** @returns {object[]} The paragraph stating the Overall System Score. */
+function scorecardSummary(scorecard) {
+  const overall = scorecard.overall === null ? "not established" : `${scorecard.overall.toFixed(2)} of 2`;
+  return [
+    {
+      text:
+        `Overall System Score ${overall}, the weighted average of the five Core Capability ` +
+        `Areas at equal weight. ${scorecard.states.scored} of ${scorecard.total} rows carry ` +
+        `a score. Of the rest: ${scorecard.states.no_benchmark} with no Threshold or ` +
+        `Objective stored, ${scorecard.states.not_measured} not measured on this date, ` +
+        `${scorecard.states.not_applicable} marked not applicable to this configuration. ` +
+        "Only scored rows enter the average: averaging over rows that were never " +
+        "benchmarked would let an evaluation raise its score by measuring less.",
+      fontSize: 8,
+      margin: [0, 0, 0, 8],
+    },
+  ];
+}
+
+/** @returns {object[]} The militarily effective verdict, stated either way. */
+function effectivenessVerdict(scorecard) {
+  if (!scorecard.notMilitarilyEffective) {
+    return [
+      {
+        text:
+          "No Critical KPP scored 0, so the criteria do not flag this system Not " +
+          "Militarily Effective on this date. Criticality is declared by the evaluator " +
+          "on the benchmark record; a KPP never marked Critical cannot raise this flag.",
+        fontSize: 8,
+        margin: [0, 0, 0, 8],
+      },
+    ];
+  }
+  const named = scorecard.criticalFailures
+    .map((entry) => `${entry.label} ${entry.measure}`)
+    .join("; ");
+  return [
+    {
+      text: `NOT MILITARILY EFFECTIVE. Critical KPP scored 0: ${named}.`,
+      bold: true,
+      color: "#B3261E",
+      fontSize: 9,
+      margin: [0, 0, 0, 8],
+    },
+  ];
+}
+
+/** @returns {object[]} Section 12: the consolidated C4 scorecard. */
+export function buildScorecardSection(criteria) {
+  const scorecard = criteria?.scorecard;
+  if (!scorecard) {
+    return [{ text: "Scorecard data was unavailable.", italics: true }];
+  }
+  const blocks = [...scorecardSummary(scorecard), ...effectivenessVerdict(scorecard)];
+  for (const area of scorecard.areas) {
+    const score = area.score === null ? "not established" : `${area.score.toFixed(2)} of 2`;
+    blocks.push({
+      text: `Criterion ${area.id} - ${area.name}: ${score} from ${area.states.scored} of ${area.total} rows`,
+      bold: true,
+      fontSize: 9,
+      color: INK,
+      margin: [0, 6, 0, 5],
+    });
+    for (const section of area.sections) {
+      blocks.push({ text: section.title, fontSize: 8, italics: true, margin: [0, 0, 0, 3] });
+      blocks.push(areaTable(section));
+    }
+  }
+  return blocks;
+}
+
+/** @returns {string} A timeline cell rendered for the page. */
+function phaseCell(value) {
+  return value === null || value === undefined ? "--" : String(value);
+}
+
+/** @returns {object[]} Section 13: the engagement timeline. */
+export function buildTimelineSection(criteria) {
+  const timeline = criteria?.timeline;
+  if (!timeline) {
+    return [{ text: "Engagement timeline data was unavailable.", italics: true }];
+  }
+  const { total } = timeline;
+  const body = [...timeline.phases, total].map((row) => [
+    { text: row.phase, bold: row.n === undefined },
+    phaseCell(row.mlcoa),
+    phaseCell(row.mdcoa),
+    phaseCell(row.delta),
+  ]);
+  return [
+    {
+      text:
+        "Mean seconds per phase across the day's intercept runs, split by the scenario " +
+        `each run was flown under. The total covers ${total.coveredPhases.mlcoa} of ` +
+        `${total.phaseCount} phases under MLCOA and ${total.coveredPhases.mdcoa} of ` +
+        `${total.phaseCount} under MDCOA. A phase with no captured timing is left blank ` +
+        "rather than counted as zero, so a total built from part of the chain is not a " +
+        "total engagement time and is not presented as one.",
+      fontSize: 8,
+      margin: [0, 0, 0, 8],
+    },
+    {
+      table: {
+        headerRows: 1,
+        widths: ["*", 70, 70, 50],
+        body: [headerRow(["Phase", "MLCOA (sec)", "MDCOA (sec)", "Delta"]), ...body],
+      },
+      layout: tableLayout(),
+      fontSize: 7.5,
+      margin: [0, 0, 0, 8],
+    },
+  ];
+}

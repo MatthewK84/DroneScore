@@ -5,23 +5,26 @@ import { Loading, Notice } from "./ui.jsx";
 import { SystemProfilePanel } from "./SystemProfilePanel.jsx";
 import { BenchmarksPanel } from "./BenchmarksPanel.jsx";
 import { TestMatrixPanel } from "./TestMatrixPanel.jsx";
-import { CriteriaReviewPanel } from "./CriteriaReviewPanel.jsx";
+import { C4ScorecardPanel } from "./C4ScorecardPanel.jsx";
 
 /**
- * Criteria tab. Holds the three things the C-sUAS Capability
- * Characterization Criteria require that are not captured run by run:
- * the system profile answers for sections 4.2.6 through 4.2.8, the
- * Threshold and Objective benchmarks that section 4.2 requires to be
- * documented before test execution, and the test matrix.
+ * Criteria tab, laid out as the consolidated C4 criteria document.
  *
- * The fourth view is the review, which shows the derived MOPs and the
- * compliance verdicts exactly as they will print on the report. Seeing
- * them before the day closes is the point: a KPP marked not established
- * is an action to take now, not a surprise on the PDF.
+ * The Scorecard is the document itself: the five Core Capability Areas,
+ * every row they print, the supporting groups, and the engagement
+ * timeline, all scored live. It opens first because it is what the
+ * evaluation is, and because it fills itself from the runs the Score tab
+ * has already logged.
+ *
+ * The other three views hold what the criteria say is decided outside a
+ * run: the system profile declarations, the Threshold and Objective
+ * benchmarks that must be documented before test execution, and the test
+ * matrix. A row whose benchmark is missing is visible on the Scorecard as
+ * an action to take now, not as a surprise on the report.
  */
 
 const VIEWS = Object.freeze([
-  { key: "review", label: "Review" },
+  { key: "scorecard", label: "Scorecard" },
   { key: "profile", label: "System Profile" },
   { key: "benchmarks", label: "Benchmarks" },
   { key: "matrix", label: "Test Matrix" },
@@ -29,7 +32,7 @@ const VIEWS = Object.freeze([
 
 /** @param {{ isAdmin: boolean }} props */
 export function CriteriaTab({ isAdmin }) {
-  const [view, setView] = useState("review");
+  const [view, setView] = useState("scorecard");
   const [catalog, setCatalog] = useState(null);
   const [interceptors, setInterceptors] = useState([]);
   const [error, setError] = useState("");
@@ -83,7 +86,7 @@ function CriteriaView({ view, catalog, interceptors, isAdmin }) {
   if (view === "matrix") {
     return <TestMatrixPanel isAdmin={isAdmin} />;
   }
-  return <CriteriaReviewPanel />;
+  return <C4ScorecardPanel isAdmin={isAdmin} interceptors={interceptors} />;
 }
 
 /** The secondary selector inside the tab. Scrolls sideways on a phone. */
