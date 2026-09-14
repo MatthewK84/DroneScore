@@ -15,6 +15,12 @@ import { C, MONO, st } from "../styles.js";
  * not have filled is noise on the way to a report.
  */
 
+/** Scenario keys the criteria split the engagement timeline by. */
+export const SCENARIOS = Object.freeze([
+  { key: "mlcoa", label: "MLCOA", hint: "Most likely" },
+  { key: "mdcoa", label: "MDCOA", hint: "Most dangerous" },
+]);
+
 /** Stage keys in kill chain order. Mirrors server/criteria.js. */
 const STAGES = Object.freeze([
   { key: "none", label: "No Detect", hint: "Flew, never seen" },
@@ -195,6 +201,22 @@ function MeasureFields({ form, setField, stage }) {
       </div>
       <p style={{ ...st.meta, marginTop: -6, marginBottom: 12 }}>
         Slant range for MOP 1.1.3 is computed from these two. No third entry needed.
+      </p>
+      <div style={st.grid2}>
+        <NumberField
+          label="Time to detect (s)"
+          value={form.detectTimeS}
+          onChange={(value) => setField("detectTimeS", value)}
+        />
+        <NumberField
+          label="Time to decide / engage (s)"
+          value={form.decideTimeS}
+          onChange={(value) => setField("decideTimeS", value)}
+        />
+      </div>
+      <p style={{ ...st.meta, marginTop: -6, marginBottom: 12 }}>
+        These two phases and the ID and intercept times below build the engagement
+        timeline. A phase left blank is reported as not captured, never as zero.
       </p>
       {reached(stage, "track") ? (
         <div style={st.grid2}>

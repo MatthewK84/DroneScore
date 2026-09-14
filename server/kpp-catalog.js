@@ -2,7 +2,10 @@
  * Key Performance Parameter and Key System Attribute catalog.
  *
  * Transcribed verbatim from sections 4.2.1 through 4.2.8 of the C-sUAS
- * Capability Characterization Criteria supplied by the evaluation team.
+ * Capability Characterization Criteria supplied by the evaluation team, and
+ * extended with the Interceptor-Specific Metrics of section 3 and the
+ * supporting groups of sections 4 through 6 of the JIATF 401 Common Criteria
+ * for CUAS Characterization (C4) consolidation.
  * This module is data only. It is the single source of truth for which
  * measures exist, what units they carry, and how a scorer supplies them.
  *
@@ -17,16 +20,17 @@
  *   day     an operational-day metric, answered once at day closeout
  *   run     derived from logged runs, never asked
  *
- * Source note: the supplied extract covers 4.2.1 through 4.2.8. Nothing
- * here is invented to fill gaps; a category the evaluation team adds later
- * is a new entry in this array and needs no schema change.
+ * Source note: nothing here is invented to fill gaps. Every entry carries
+ * the measure name, units, and description of its source table, and a
+ * category the evaluation team adds later is a new entry in this array and
+ * needs no schema change.
  */
 
 /**
  * @typedef {object} KppEntry
  * @property {string} id Catalog identifier, matching the source document.
  * @property {string} category Section heading the entry belongs to.
- * @property {string} kind "KPP" or "KSA".
+ * @property {string} kind "KPP", "KSA", or "INT".
  * @property {string} measure Measure name from the source table.
  * @property {string} units Units column from the source table.
  * @property {"number"|"yesno"|"spec"|"list"} input Capture control to render.
@@ -130,6 +134,66 @@ const SURVIVABILITY_KPPS = [
   { id: "8.11", kind: "KPP", measure: "System Spec", units: "List", input: "list", tier: "system", description: "Environmental." },
 ];
 
+
+/**
+ * Interceptor-Specific Metrics. Section 3 of the JIATF 401 Common Criteria
+ * for CUAS Characterization adds these to Criterion 3 for kinetic
+ * interceptor drones. They are properties of the interceptor rather than
+ * of any single run, so they are declared once on the system profile.
+ */
+const INTERCEPTOR_METRICS = [
+  { id: "INT-1", kind: "INT", measure: "Interceptor Max Speed", units: "m/s or kt", input: "number", tier: "system", description: "Maximum speed of the interceptor drone." },
+  { id: "INT-2", kind: "INT", measure: "Acceleration / G-Load", units: "g", input: "number", tier: "system", description: "Maximum sustained acceleration and maneuverability." },
+  { id: "INT-3", kind: "INT", measure: "Intercept Envelope", units: "km / m AGL", input: "spec", tier: "system", description: "Effective engagement volume, range by altitude." },
+  { id: "INT-4", kind: "INT", measure: "Seeker Acquisition Range", units: "km", input: "number", tier: "system", description: "Range at which the seeker acquires and locks the target." },
+  { id: "INT-5", kind: "INT", measure: "Probability of Lock", units: "%", input: "number", tier: "system", description: "Probability of successful seeker lock once inside acquisition range." },
+  { id: "INT-6", kind: "INT", measure: "Terminal Guidance Accuracy (CEP)", units: "m", input: "number", tier: "system", description: "Circular Error Probable at intercept." },
+  { id: "INT-7", kind: "INT", measure: "Mid-Course Update Capability", units: "Y/N", input: "yesno", tier: "system", description: "Ability to receive in-flight target updates." },
+  { id: "INT-8", kind: "INT", measure: "Kill Mechanism", units: "Spec.", input: "spec", tier: "system", description: "Hit-to-kill against proximity, with lethal radius." },
+  { id: "INT-9", kind: "INT", measure: "Fuse / Detonation Performance", units: "% / m", input: "spec", tier: "system", description: "Proximity fuse reliability and lethal radius." },
+  { id: "INT-10", kind: "INT", measure: "Multi-Interceptor Coordination", units: "Y/N or #", input: "yesno", tier: "system", description: "Ability to coordinate multiple interceptors against one or multiple threats." },
+  { id: "INT-11", kind: "INT", measure: "Reload / Magazine Cycle Time", units: "sec / min", input: "number", tier: "system", description: "Time to reload or prepare the next interceptor." },
+  { id: "INT-12", kind: "INT", measure: "Abort / Self-Destruct Capability", units: "Y/N", input: "yesno", tier: "system", description: "Safe abort or self-destruct function." },
+  { id: "INT-13", kind: "INT", measure: "Engagement Geometry Performance", units: "%", input: "number", tier: "system", description: "Pk under head-on, tail-chase, crossing, and high-aspect geometries." },
+  { id: "INT-14", kind: "INT", measure: "Debris Characterization", units: "Spec. / m", input: "spec", tier: "system", description: "Kinetic debris field size, energy, and risk footprint." },
+];
+
+/** Ancillary and cost measures named in section 4 of the consolidated criteria. */
+const ANCILLARY_KPPS = [
+  { id: "9.1", kind: "KPP", measure: "Battery Life", units: "min", input: "number", tier: "system", description: "Endurance of the system on one charge or fuel load." },
+  { id: "9.2", kind: "KPP", measure: "Weight", units: "kg", input: "number", tier: "system", description: "Transported weight of the system as fielded." },
+  { id: "9.3", kind: "KPP", measure: "Labor Cost", units: "$", input: "number", tier: "system", description: "Labor cost to operate the system for the evaluated period." },
+  { id: "9.4", kind: "KPP", measure: "Setup Time", units: "min", input: "number", tier: "day", description: "Time from arrival to a system ready to engage." },
+  { id: "9.5", kind: "KPP", measure: "System Cost", units: "$", input: "number", tier: "system", description: "Acquisition cost of one complete system." },
+  { id: "9.6", kind: "KPP", measure: "Component Cost", units: "$", input: "number", tier: "system", description: "Cost of one expendable interceptor or consumable component." },
+  { id: "9.7", kind: "KPP", measure: "Maintenance Cost", units: "$", input: "number", tier: "system", description: "Maintenance cost over the evaluated period." },
+];
+
+/**
+ * Operator and system usability, section 5 of the consolidated criteria.
+ * NASA-TLX and its subscales run 0 to 100 and a lower score is the better
+ * result; SAGAT and the System Usability Scale run the other way.
+ */
+const USABILITY_KPPS = [
+  { id: "10.1", kind: "KPP", measure: "NASA-TLX Overall", units: "0-100", input: "number", tier: "system", description: "Overall NASA Task Load Index weighted workload score." },
+  { id: "10.1a", kind: "KSA", measure: "NASA-TLX Mental Demand", units: "0-100", input: "number", tier: "system", description: "Mental demand subscale." },
+  { id: "10.1b", kind: "KSA", measure: "NASA-TLX Physical Demand", units: "0-100", input: "number", tier: "system", description: "Physical demand subscale." },
+  { id: "10.1c", kind: "KSA", measure: "NASA-TLX Temporal Demand", units: "0-100", input: "number", tier: "system", description: "Temporal demand subscale." },
+  { id: "10.1d", kind: "KSA", measure: "NASA-TLX Performance", units: "0-100", input: "number", tier: "system", description: "Perceived performance subscale." },
+  { id: "10.1e", kind: "KSA", measure: "NASA-TLX Effort", units: "0-100", input: "number", tier: "system", description: "Effort subscale." },
+  { id: "10.1f", kind: "KSA", measure: "NASA-TLX Frustration", units: "0-100", input: "number", tier: "system", description: "Frustration subscale." },
+  { id: "10.2", kind: "KPP", measure: "SAGAT", units: "%", input: "number", tier: "system", description: "Situation Awareness Global Assessment Technique score." },
+  { id: "10.3", kind: "KPP", measure: "System Usability Scale", units: "0-100", input: "number", tier: "system", description: "System Usability Scale score." },
+  { id: "10.4", kind: "KSA", measure: "Cognitive Load and Decision Speed", units: "Spec.", input: "spec", tier: "system", description: "Notes on cognitive load and decision speed under multi-target and swarm conditions." },
+];
+
+/** Mission impact and risk assessment, section 6 of the consolidated criteria. */
+const MISSION_IMPACT_KPPS = [
+  { id: "11.1", kind: "KPP", measure: "Public and Blue Force Safety", units: "Spec.", input: "spec", tier: "system", description: "Debris, electromagnetic effects, uncontrolled descent, and safety footprints." },
+  { id: "11.2", kind: "KPP", measure: "Resilience to Countermeasures", units: "Spec.", input: "spec", tier: "system", description: "Performance under jamming, spoofing, and saturation." },
+  { id: "11.3", kind: "KPP", measure: "Net Mission Impact", units: "Spec.", input: "spec", tier: "system", description: "Asset protection weighed against logistical footprint and friendly interference." },
+];
+
 /** Section heading for each catalog block, in source document order. */
 const CATEGORIES = Object.freeze([
   { section: "4.2.1", name: "Detect", entries: DETECT_KPPS },
@@ -140,6 +204,10 @@ const CATEGORIES = Object.freeze([
   { section: "4.2.6", name: "Automation", entries: AUTOMATION_KPPS },
   { section: "4.2.7", name: "C2", entries: C2_KPPS },
   { section: "4.2.8", name: "Survivability", entries: SURVIVABILITY_KPPS },
+  { section: "C4 3", name: "Interceptor-Specific", entries: INTERCEPTOR_METRICS },
+  { section: "C4 4", name: "Ancillary & Cost", entries: ANCILLARY_KPPS },
+  { section: "C4 5", name: "Operator & System Usability", entries: USABILITY_KPPS },
+  { section: "C4 6", name: "Mission Impact & Risk", entries: MISSION_IMPACT_KPPS },
 ]);
 
 /** @returns {KppEntry[]} Every catalog entry, flattened and tagged by category. */

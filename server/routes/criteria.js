@@ -1,7 +1,9 @@
 import express from "express";
 import { requireRole } from "../auth.js";
 import { buildCompliance, primaryGroup, primarySystem, resolveBenchmarks, summarizeCompliance } from "../compliance.js";
-import { CRITERIA, deriveMops, KILL_CHAIN } from "../criteria.js";
+import { CRITERIA, deriveMops, deriveTimeline, KILL_CHAIN, SCENARIOS } from "../criteria.js";
+import { C4_AREAS, C4_SUPPORTING, isNaKey, isScorecardRowId, isVerdictKey } from "../c4.js";
+import { buildScorecard } from "../c4-score.js";
 import { catalogByCategory, isKnownKppId, KPP_CATALOG } from "../kpp-catalog.js";
 import { deriveBenchmarks, GROUP_KINEMATICS } from "../thresholds.js";
 import { asId, asOptionalInteger, asOptionalNumber, asProfile, asText, requiredText } from "../validate.js";
@@ -30,9 +32,22 @@ const NARRATIVE_MOP_KEYS = Object.freeze([
   "mop.5.3.2",
 ]);
 
-/** @returns {boolean} True for any key the system profile may store. */
+/**
+ * @returns {boolean} True for any key the system profile may store: a
+ *   catalog answer, a narrative MOP, that narrative's Y/N or Pass/Fail
+ *   verdict, or the mark that takes one scorecard row out of scoring as
+ *   Not Applicable to this interceptor configuration.
+ */
 function isProfileKey(key) {
-  return isKnownKppId(key) || NARRATIVE_MOP_KEYS.includes(key);
+  return isKnownKppId(key) || NARRATIVE_MOP_KEYS.includes(key) || isVerdictKey(key) || isNaKey(key);
+}
+
+/**
+ * @returns {boolean} True for an id a Threshold and Objective may be stored
+ *   against: any catalog KPP, and any MOP row the scorecard scores.
+ */
+function isBenchmarkableId(id) {
+  return isKnownKppId(id) || isScorecardRowId(id);
 }
 
 /** Maps a benchmark row to the API shape. */
@@ -46,13 +61,14 @@ function benchmarkToApi(row) {
     objective: row.objective === null ? null : Number(row.objective),
     unit: row.unit,
     basis: row.basis,
+    critical: row.critical === true,
   };
 }
 
 /** @returns {object | null} Validated benchmark payload, or null. */
 function parseBenchmark(body) {
   const kppId = asText(body?.kppId, 20);
-  if (!isKnownKppId(kppId)) {
+  if (!isBenchmarkableId(kppId)) {
     return null;
   }
   return {
@@ -63,6 +79,7 @@ function parseBenchmark(body) {
     objective: asOptionalNumber(body?.objective, -1000000, 1000000),
     unit: asText(body?.unit, 20),
     basis: asText(body?.basis, 2000),
+    critical: body?.critical === true,
   };
 }
 
@@ -257,6 +274,8 @@ export function assembleReview(day, rows, benchmarkRows, config) {
     mops,
     compliance,
     summary: summarizeCompliance(compliance),
+    scorecard: buildScorecard(mops, compliance, profile, benchmarks),
+    timeline: deriveTimeline(rows),
     system,
     uasGroup: group,
     timezone: config.timezone,
@@ -276,6 +295,9 @@ export function createCriteriaRouter(pool, config) {
       categories: catalogByCategory(),
       groups: GROUP_KINEMATICS,
       narrativeMops: NARRATIVE_MOP_KEYS,
+      areas: C4_AREAS,
+      supporting: C4_SUPPORTING,
+      scenarios: SCENARIOS,
     });
   });
 
@@ -292,16 +314,16 @@ export function createCriteriaRouter(pool, config) {
   router.put("/criteria/benchmarks", requireRole("admin"), async (req, res) => {
     const payload = parseBenchmark(req.body);
     if (!payload) {
-      return res.status(400).json({ success: false, error: "A known KPP id is required." });
+      return res.status(400).json({ success: false, error: "A known KPP or scorecard row id is required." });
     }
     try {
       await pool.query(
-        `INSERT INTO benchmarks (interceptor_id, kpp_id, uas_group, threshold, objective, unit, basis)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO benchmarks (interceptor_id, kpp_id, uas_group, threshold, objective, unit, basis, critical)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          ON CONFLICT (COALESCE(interceptor_id, 0), kpp_id, uas_group)
          DO UPDATE SET threshold=EXCLUDED.threshold, objective=EXCLUDED.objective,
-           unit=EXCLUDED.unit, basis=EXCLUDED.basis, updated_at=now()`,
-        [payload.interceptorId, payload.kppId, payload.uasGroup, payload.threshold, payload.objective, payload.unit, payload.basis]
+           unit=EXCLUDED.unit, basis=EXCLUDED.basis, critical=EXCLUDED.critical, updated_at=now()`,
+        [payload.interceptorId, payload.kppId, payload.uasGroup, payload.threshold, payload.objective, payload.unit, payload.basis, payload.critical]
       );
       return res.json({ success: true });
     } catch (error) {

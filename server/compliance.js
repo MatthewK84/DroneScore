@@ -39,6 +39,7 @@ const KPP_FROM_MOP = Object.freeze({
 const KPP_FROM_DAY = Object.freeze({
   "6.1": "operate_crew",
   "6.3": "setup_crew",
+  "9.4": "setup_minutes",
 });
 
 /** @returns {number | null} The scaled numeric value carried by a MOP result. */
@@ -169,6 +170,7 @@ export function buildCompliance(mopGroups, day, profile, benchmarks) {
       threshold: benchmark?.threshold ?? null,
       objective: benchmark?.objective ?? null,
       basis: benchmark?.basis || "",
+      critical: benchmark?.critical === true,
       ...record,
     };
   });
@@ -211,6 +213,7 @@ export function resolveBenchmarks(rows, interceptorId, uasGroup) {
         objective: row.objective === null ? null : Number(row.objective),
         unit: row.unit,
         basis: row.basis,
+        critical: row.critical === true,
       },
     ])
   );

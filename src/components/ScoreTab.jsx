@@ -4,6 +4,7 @@ import {
   ApiError,
   deleteEngagement,
   getCurrentDay,
+  getDayCriteria,
   listDrones,
   listInterceptors,
   listTestProfiles,
@@ -12,12 +13,20 @@ import {
 import { useStopwatch } from "../hooks.js";
 import { C, MONO, st } from "../styles.js";
 import { Loading, Notice } from "./ui.jsx";
-import { AdvancedMeasures, OUTCOME_FOR_STAGE, StagePicker } from "./StagePicker.jsx";
+import { AdvancedMeasures, OUTCOME_FOR_STAGE, SCENARIOS, StagePicker } from "./StagePicker.jsx";
 import { WeatherPanel } from "./WeatherPanel.jsx";
 
 /**
- * Score tab. Shows the live scoreboard for today, a large touch-friendly
- * engagement form with a built-in stopwatch, and the day's engagement log.
+ * Score tab. Shows the live scoreboard for today, the live C4 scorecard
+ * standing beneath it, a large touch-friendly engagement form with a
+ * built-in stopwatch, and the day's engagement log.
+ *
+ * The scorecard strip is the whole point of the coupling between this tab
+ * and the Criteria tab: logging an engagement is the only action a scorer
+ * takes, and every criteria row that engagement bears on is measured,
+ * scored, and rolled into the Overall System Score from that one action.
+ * The strip shows the result immediately, so a scorer never has to leave
+ * this screen to know where the evaluation stands.
  */
 
 const OUTCOMES = Object.freeze([
@@ -56,6 +65,7 @@ const EMPTY_FORM = Object.freeze({
   runType: "red_air",
   stageReached: "defeat",
   outcome: "success",
+  scenario: "mlcoa",
   timeToInterceptS: "",
   engagementRangeM: "",
   altitudeM: "",
@@ -66,6 +76,8 @@ const EMPTY_FORM = Object.freeze({
   idRangeM: "",
   idTimeS: "",
   identifiedOk: "",
+  detectTimeS: "",
+  decideTimeS: "",
   notes: "",
 });
 
@@ -83,6 +95,7 @@ function toPayload(form) {
     // so it carries no stage and must not be counted as a failure to detect.
     stageReached: abort ? null : form.stageReached,
     outcome: form.outcome,
+    scenario: form.scenario,
     timeToInterceptS: asNumber(form.timeToInterceptS),
     engagementRangeM: asNumber(form.engagementRangeM),
     altitudeM: asNumber(form.altitudeM),
@@ -93,6 +106,8 @@ function toPayload(form) {
     idRangeM: asNumber(form.idRangeM),
     idTimeS: asNumber(form.idTimeS),
     identifiedOk: form.identifiedOk === "" ? null : form.identifiedOk,
+    detectTimeS: asNumber(form.detectTimeS),
+    decideTimeS: asNumber(form.decideTimeS),
     notes: form.notes,
   };
 }
@@ -131,8 +146,16 @@ export function ScoreTab({ isAdmin }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [scorecard, setScorecard] = useState(null);
   const stopwatch = useStopwatch();
 
+  /**
+   * Reloads the day and, with it, the criteria scorecard the day's runs
+   * produce. The scorecard is fetched here rather than only on the Criteria
+   * tab so that the consequence of logging a run is visible where the run
+   * was logged. A scorecard that fails to build never blocks scoring: the
+   * strip disappears and the engagement form carries on.
+   */
   const reload = useCallback(async () => {
     try {
       const [dayData, droneData, interceptorData, profileData] = await Promise.all([
@@ -148,6 +171,7 @@ export function ScoreTab({ isAdmin }) {
       setInterceptors(interceptorData.interceptors);
       setTestProfiles(profileData.profiles.filter((profile) => profile.active));
       setError("");
+      setScorecard(await loadScorecard(dayData.day.id));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to load the day.");
     } finally {
@@ -176,8 +200,13 @@ export function ScoreTab({ isAdmin }) {
     });
   }, []);
 
+  /**
+   * Clears the form but keeps the scenario. A block of runs is flown under
+   * one course of action, so re-picking it after every entry would be the
+   * extra step this screen exists to avoid.
+   */
   const resetForm = useCallback(() => {
-    setForm(EMPTY_FORM);
+    setForm((prev) => ({ ...EMPTY_FORM, scenario: prev.scenario }));
     setEditingId(null);
     stopwatch.reset();
   }, [stopwatch]);
@@ -224,6 +253,9 @@ export function ScoreTab({ isAdmin }) {
       idRangeM: formValue(engagement.idRangeM),
       idTimeS: formValue(engagement.idTimeS),
       identifiedOk: identifiedOkToForm(engagement.identifiedOk),
+      scenario: engagement.scenario || "mlcoa",
+      detectTimeS: formValue(engagement.detectTimeS),
+      decideTimeS: formValue(engagement.decideTimeS),
       notes: engagement.notes || "",
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -258,6 +290,7 @@ export function ScoreTab({ isAdmin }) {
   return (
     <div>
       <DayStrip day={day} stats={stats} />
+      <ScorecardStrip scorecard={scorecard} />
       <WeatherPanel />
       {closed ? (
         <Notice tone="warn">
@@ -290,6 +323,21 @@ export function ScoreTab({ isAdmin }) {
   );
 }
 
+/**
+ * @param {number} dayId
+ * @returns {Promise<object | null>} The day's scorecard, or null when it
+ *   could not be built. A criteria failure must never stop a scorer from
+ *   logging the next run, so this swallows the error rather than raising.
+ */
+async function loadScorecard(dayId) {
+  try {
+    const review = await getDayCriteria(dayId);
+    return review.scorecard || null;
+  } catch {
+    return null;
+  }
+}
+
 /** The dark scoreboard summarizing the current day. */
 function DayStrip({ day, stats }) {
   const overall = stats?.overall;
@@ -315,6 +363,47 @@ function DayStrip({ day, stats }) {
           {day?.status || "open"}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The live C4 scorecard, standing under the day scoreboard. Every value
+ * here follows from runs already logged: no scorer action produces it and
+ * none is asked for.
+ */
+function ScorecardStrip({ scorecard }) {
+  if (scorecard === null) {
+    return null;
+  }
+  const overall = scorecard.overall === null ? "--" : scorecard.overall.toFixed(2);
+  return (
+    <div style={st.card}>
+      <h2 style={st.secHead}>C4 Scorecard, Live</h2>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+        <span style={{ fontFamily: MONO, fontSize: 30, color: C.olive }}>{overall}</span>
+        <span style={st.meta}>Overall System Score, out of 2</span>
+      </div>
+      {scorecard.notMilitarilyEffective ? (
+        <Notice tone="error">
+          Not Militarily Effective: {scorecard.criticalFailures.map((entry) => entry.label).join(", ")}{" "}
+          scored 0 against a Critical KPP.
+        </Notice>
+      ) : null}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 5, marginTop: 10 }}>
+        {scorecard.areas.map((area) => (
+          <div key={area.id} style={{ textAlign: "center", padding: "6px 2px", border: `1px solid ${C.line}`, borderRadius: 8 }}>
+            <div style={{ ...st.stripLabel, fontSize: 9 }}>Crit {area.id}</div>
+            <div style={{ fontFamily: MONO, fontSize: 17, color: area.score === null ? C.inkMuted : C.olive }}>
+              {area.score === null ? "--" : area.score.toFixed(2)}
+            </div>
+          </div>
+        ))}
+      </div>
+      <p style={{ ...st.meta, marginTop: 10 }}>
+        {scorecard.states.scored} of {scorecard.total} criteria rows are scored from the runs
+        logged so far. Open the Criteria tab for the full tables.
+      </p>
     </div>
   );
 }
@@ -390,6 +479,31 @@ function EngagementForm(props) {
           </select>
         </label>
       ) : null}
+      <span style={st.label}>Scenario</span>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+        {SCENARIOS.map((option) => {
+          const active = form.scenario === option.key;
+          return (
+            <button
+              key={option.key}
+              onClick={() => setField("scenario", option.key)}
+              style={{
+                ...st.outcomeBtn,
+                minHeight: 52,
+                fontSize: 14,
+                borderColor: active ? C.olive : C.line,
+                color: active ? C.olive : C.inkMuted,
+                background: active ? `${C.olive}12` : C.panel,
+              }}
+            >
+              {option.label}
+              <span style={{ fontFamily: MONO, fontSize: 10, textTransform: "none", letterSpacing: 0 }}>
+                {option.hint}
+              </span>
+            </button>
+          );
+        })}
+      </div>
       <span style={st.label}>Run type</span>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
         {RUN_TYPES.map((option) => {
@@ -566,6 +680,7 @@ function EngagementRow({ engagement, isAdmin, onEdit, onDelete }) {
           </span>
         </div>
         <div style={{ ...st.meta, marginTop: 4 }}>
+          {engagement.scenario ? `${engagement.scenario.toUpperCase()} | ` : ""}
           {engagement.stageReached ? `${stageLabel(engagement.stageReached)} | ` : ""}
           {engagement.sortie ? `${engagement.sortie} | ` : ""}
           {engagement.timeToInterceptS !== null ? `${engagement.timeToInterceptS}s | ` : ""}
