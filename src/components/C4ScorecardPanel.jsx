@@ -146,6 +146,7 @@ function ScoreHeader({ scorecard, system, group }) {
         {scorecard.states.scored} of {scorecard.total} rows carry a score. Of the rest:{" "}
         {scorecard.states.no_benchmark} with no Threshold or Objective stored,{" "}
         {scorecard.states.not_measured} with no measurement yet,{" "}
+        {scorecard.states.reported} reported as specifications the criteria do not score,{" "}
         {scorecard.states.not_applicable} marked not applicable. Only scored rows enter
         the average, so a row left unbenchmarked lowers coverage rather than the score.
       </p>

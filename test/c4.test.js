@@ -271,3 +271,17 @@ test("profile and benchmark keys are recognized only for rows that exist", () =>
   assert.ok(isVerdictKey(verdictKey("4.1.2")));
   assert.equal(isVerdictKey("mop.9.9.9.verdict"), false);
 });
+
+test("the five row states account for every row, so a reader can reconcile the total", () => {
+  const rows = [run({}), run({ outcome: "unsuccessful", stage_reached: "engage" })];
+  const scorecard = scorecardOf(
+    rows,
+    [benchmark("3.1.2", 60, 80), benchmark("INT-1", 60, 100)],
+    { "INT-1": "85", "INT-8": "Hit-to-kill, no warhead.", [naKey("INT-9")]: "yes" },
+    {}
+  );
+  const counted = Object.values(scorecard.states).reduce((sum, value) => sum + value, 0);
+  assert.equal(counted, scorecard.total, "every row falls into exactly one state");
+  assert.equal(scorecard.states.reported, 1, "a specification row is reported, not scored");
+  assert.equal(scorecard.states.not_applicable, 1);
+});

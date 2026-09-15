@@ -381,6 +381,7 @@ function scorecardSummary(scorecard) {
         `Areas at equal weight. ${scorecard.states.scored} of ${scorecard.total} rows carry ` +
         `a score. Of the rest: ${scorecard.states.no_benchmark} with no Threshold or ` +
         `Objective stored, ${scorecard.states.not_measured} not measured on this date, ` +
+        `${scorecard.states.reported} reported as specifications the criteria do not score, ` +
         `${scorecard.states.not_applicable} marked not applicable to this configuration. ` +
         "Only scored rows enter the average: averaging over rows that were never " +
         "benchmarked would let an evaluation raise its score by measuring less.",
