@@ -227,13 +227,17 @@ npm run lint    # ESLint across server, client, and tests
 
 ## The read-only board in detail
 
-The board is a running tally sheet, the only thing viewers see. It shows the
-day scoreboard (logged, hits, Pk, status), the live range weather with the
-GO / CAUTION / NO-FLY estimate per UAS Group, and every scored item with the
-weather captured at scoring time. Fleet, schedule, feedback, past days, and
-report downloads are not visible to viewers; the server exposes viewers a
-single read-only endpoint, so the rest is hidden at the API level, not just
-in the UI. The tally polls every few seconds, so it tracks scorer entries in
+The board is what viewers see: a running tally sheet and each interceptor's
+progress toward JIATF 401 C4 criteria compliance. It shows the day scoreboard
+(logged, hits, Pk, status), a progress panel per interceptor scored across the
+whole evaluation, the live range weather with the GO / CAUTION / NO-FLY
+estimate per UAS Group, and every scored item with the weather captured at
+scoring time. Progress is published as scores and counts only; measured
+values, benchmarks, and the system profile (which holds accreditation details
+and cybersecurity findings) are never sent to viewers. Fleet, schedule,
+feedback, past days, and report downloads are not visible to viewers either;
+the server exposes viewers two read-only endpoints, so the rest is hidden at
+the API level, not just in the UI. The tally polls every few seconds, so it tracks scorer entries in
 near real time. Scorers and admins keep the full application through the ops
 console with the existing passwords.
 
@@ -264,6 +268,7 @@ Each service: React SPA + Express (server/)
   kpp-catalog.js  the KPP, KSA, and interceptor-metric catalog, data only
   c4.js           the C4 scorecard structure, as the criteria print it
   c4-score.js     0/1/2/NA scoring, area rollup, Critical KPP flag
+  systems.js      per-interceptor packages and cumulative board progress
   wor.js          pdfmake vector report builder
 ```
 
@@ -293,6 +298,11 @@ The database schema is created at boot; there is no separate migration step.
   Threshold and Objective stored, or no measurement yet, is reported in that
   state and kept out of the score: averaging over rows that were never
   benchmarked would let an evaluation raise its score by measuring less.
+- Criteria are scored per interceptor, from that interceptor's runs only. A day
+  that flew two systems is two evaluations, and the report gives each its own
+  pages. Every system documented on a day shares that day's range space, so the
+  day closeout counters apply to each of them in full. Runs logged with no
+  interceptor are counted and excluded from every system.
 - The criteria flag a system "Not Militarily Effective" when a Critical KPP
   scores 0, but do not say which KPPs are critical. That is declared by the
   evaluator on the benchmark record, beside the Threshold and Objective, and is

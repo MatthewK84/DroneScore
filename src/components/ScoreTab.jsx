@@ -146,7 +146,7 @@ export function ScoreTab({ isAdmin }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [scorecard, setScorecard] = useState(null);
+  const [scorecards, setScorecards] = useState(null);
   const stopwatch = useStopwatch();
 
   /**
@@ -171,7 +171,7 @@ export function ScoreTab({ isAdmin }) {
       setInterceptors(interceptorData.interceptors);
       setTestProfiles(profileData.profiles.filter((profile) => profile.active));
       setError("");
-      setScorecard(await loadScorecard(dayData.day.id));
+      setScorecards(await loadScorecard(dayData.day.id));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to load the day.");
     } finally {
@@ -290,7 +290,7 @@ export function ScoreTab({ isAdmin }) {
   return (
     <div>
       <DayStrip day={day} stats={stats} />
-      <ScorecardStrip scorecard={scorecard} />
+      <ScorecardStrip systems={scorecards} />
       <WeatherPanel />
       {closed ? (
         <Notice tone="warn">
@@ -325,14 +325,15 @@ export function ScoreTab({ isAdmin }) {
 
 /**
  * @param {number} dayId
- * @returns {Promise<object | null>} The day's scorecard, or null when it
- *   could not be built. A criteria failure must never stop a scorer from
+ * @returns {Promise<object[] | null>} Each system's scorecard, primary
+ *   first, or null when it could not be built. A criteria failure must never stop a scorer from
  *   logging the next run, so this swallows the error rather than raising.
  */
 async function loadScorecard(dayId) {
   try {
     const review = await getDayCriteria(dayId);
-    return review.scorecard || null;
+    const systems = (review.systems || []).map((pkg) => ({ name: pkg.system.name, scorecard: pkg.scorecard }));
+    return systems.length > 0 ? systems : [{ name: null, scorecard: review.scorecard }];
   } catch {
     return null;
   }
@@ -368,20 +369,42 @@ function DayStrip({ day, stats }) {
 }
 
 /**
- * The live C4 scorecard, standing under the day scoreboard. Every value
- * here follows from runs already logged: no scorer action produces it and
- * none is asked for.
+ * The live C4 scorecard, standing under the day scoreboard, one line per
+ * interceptor flown today. Every value here follows from runs already
+ * logged: no scorer action produces it and none is asked for. Each system
+ * is scored from its own runs, so logging a run moves only that system's
+ * line.
  */
-function ScorecardStrip({ scorecard }) {
-  if (scorecard === null) {
+function ScorecardStrip({ systems }) {
+  if (systems === null) {
     return null;
   }
-  const overall = scorecard.overall === null ? "--" : scorecard.overall.toFixed(2);
+  const scored = systems.reduce((sum, entry) => sum + entry.scorecard.states.scored, 0);
   return (
     <div style={st.card}>
       <h2 style={st.secHead}>C4 Scorecard, Live</h2>
+      {systems.map((entry) => (
+        <SystemLine key={entry.name || "none"} name={entry.name} scorecard={entry.scorecard} showName={systems.length > 1} />
+      ))}
+      <p style={{ ...st.meta, marginTop: 10 }}>
+        {systems.length > 1
+          ? `${systems.length} systems flown today, each scored from its own runs. `
+          : ""}
+        {scored} criteria rows scored from the runs logged so far. Open the Criteria tab for the
+        full tables.
+      </p>
+    </div>
+  );
+}
+
+/** One system's overall score, area scores, and effectiveness flag. */
+function SystemLine({ name, scorecard, showName }) {
+  const overall = scorecard.overall === null ? "--" : scorecard.overall.toFixed(2);
+  return (
+    <div style={{ paddingTop: showName ? 10 : 0, marginTop: showName ? 6 : 0, borderTop: showName ? `1px solid ${C.line}` : "none" }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-        <span style={{ fontFamily: MONO, fontSize: 30, color: C.olive }}>{overall}</span>
+        {showName ? <strong style={{ fontFamily: MONO, fontSize: 14, color: C.ink }}>{name}</strong> : null}
+        <span style={{ fontFamily: MONO, fontSize: showName ? 22 : 30, color: C.olive }}>{overall}</span>
         <span style={st.meta}>Overall System Score, out of 2</span>
       </div>
       {scorecard.notMilitarilyEffective ? (
@@ -390,20 +413,16 @@ function ScorecardStrip({ scorecard }) {
           scored 0 against a Critical KPP.
         </Notice>
       ) : null}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 5, marginTop: 10 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 5, marginTop: 8 }}>
         {scorecard.areas.map((area) => (
           <div key={area.id} style={{ textAlign: "center", padding: "6px 2px", border: `1px solid ${C.line}`, borderRadius: 8 }}>
-            <div style={{ ...st.stripLabel, fontSize: 9 }}>Crit {area.id}</div>
+            <div style={{ ...st.stripLabel, fontSize: 9, color: C.inkMuted }}>Crit {area.id}</div>
             <div style={{ fontFamily: MONO, fontSize: 17, color: area.score === null ? C.inkMuted : C.olive }}>
               {area.score === null ? "--" : area.score.toFixed(2)}
             </div>
           </div>
         ))}
       </div>
-      <p style={{ ...st.meta, marginTop: 10 }}>
-        {scorecard.states.scored} of {scorecard.total} criteria rows are scored from the runs
-        logged so far. Open the Criteria tab for the full tables.
-      </p>
     </div>
   );
 }

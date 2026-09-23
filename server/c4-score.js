@@ -207,6 +207,7 @@ function scoreRow(row, context) {
     threshold: benchmark?.threshold ?? null,
     objective: benchmark?.objective ?? null,
     critical: benchmark?.critical === true,
+    benchmarkBasis: benchmark?.basis || "",
   };
   if (context.profile?.[naKey(row.id)] === "yes") {
     return { ...base, measured: null, measuredText: "", score: null, state: "not_applicable", source: "", notes: "Marked not applicable to this configuration." };

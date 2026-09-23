@@ -157,6 +157,11 @@ export function getPublicDay() {
   return request("GET", "/public/day/current");
 }
 
+/** @returns {Promise<{ systems: object[], unassignedRuns: number }>} Criteria progress per interceptor. */
+export function getPublicProgress() {
+  return request("GET", "/public/progress");
+}
+
 /** @returns {Promise<{ events: object[] }>} */
 export function listSchedule() {
   return request("GET", "/schedule");
