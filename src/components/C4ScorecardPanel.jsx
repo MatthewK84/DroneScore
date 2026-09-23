@@ -26,6 +26,7 @@ const STATE_LABELS = Object.freeze({
   reported: "Reported",
   no_benchmark: "No T/O",
   not_measured: "No data",
+  claimed: "Claimed",
 });
 
 const SCORE_COLORS = Object.freeze({ 0: C.miss, 1: C.olive, 2: C.success });
@@ -146,6 +147,115 @@ export function C4ScorecardPanel({ isAdmin, interceptors }) {
       ))}
       <SupportingCard groups={shown.scorecard.supporting} />
       <TimelineCard timeline={shown.timeline} />
+      <DeclarationsCard pkg={shown} />
+    </div>
+  );
+}
+
+const VERDICTS = Object.freeze({
+  consistent: { text: "Consistent", color: C.success },
+  shortfall: { text: "Shortfall", color: C.miss },
+  inconsistent: { text: "Inconsistent", color: C.miss },
+  untested: { text: "Untested", color: C.inkMuted },
+});
+
+/** @returns {string} A figure with its unit, or a dash. */
+function withUnit(value, unit) {
+  if (value === null || value === undefined) {
+    return "--";
+  }
+  if (typeof value !== "number") {
+    return String(value);
+  }
+  const number = value.toLocaleString("en-US");
+  return unit === "$" ? `$${number}` : `${number} ${unit}`.trim();
+}
+
+/**
+ * The derivation engine's working for the system shown: what it computed
+ * from declared and demonstrated figures, which UAS groups the interceptor
+ * can outrun, and every declared claim held against what the runs showed.
+ */
+function DeclarationsCard({ pkg }) {
+  const derivations = pkg.derivations || [];
+  const checks = pkg.crossChecks || [];
+  const speed = pkg.speedAdvantage || [];
+  if (derivations.length === 0 && checks.length === 0) {
+    return null;
+  }
+  return (
+    <div style={st.card}>
+      <h2 style={st.secHead}>Vendor Declarations and Derivations</h2>
+      <p style={{ ...st.meta, marginBottom: 12 }}>
+        Computed, never estimated: every value shows its arithmetic, and one missing an input
+        names it. No probability is produced from a specification; a claim is only ever held
+        against the runs.
+      </p>
+      {derivations.map((entry) => (
+        <div key={entry.id} style={{ ...st.rowItem, display: "block", padding: "8px 0" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+            <span style={{ fontSize: 13, color: C.ink }}>
+              <span style={{ fontFamily: MONO, fontWeight: 600 }}>{entry.id}</span> {entry.measure}
+            </span>
+            <span style={{ fontFamily: MONO, fontSize: 13, color: entry.value === null ? C.inkMuted : C.ink, whiteSpace: "nowrap" }}>
+              {withUnit(entry.value, entry.units)}
+            </span>
+          </div>
+          <div style={{ ...st.meta, fontSize: 11, marginTop: 3 }}>{entry.basis}</div>
+          {(entry.warnings || []).map((warning) => (
+            <div key={warning} style={{ fontSize: 12, color: C.miss, marginTop: 3 }}>Warning: {warning}</div>
+          ))}
+        </div>
+      ))}
+      {speed.length > 0 ? (
+        <div style={{ marginTop: 12 }}>
+          <div style={st.label}>Declared top speed against UAS group ceilings</div>
+          {speed.map((entry) => (
+            <div key={entry.group} style={{ ...st.meta, fontSize: 11, marginTop: 3 }}>{entry.text}</div>
+          ))}
+        </div>
+      ) : null}
+      {checks.length > 0 ? <CrossCheckTable checks={checks} /> : null}
+    </div>
+  );
+}
+
+/** Every declared claim against what the runs demonstrated. */
+function CrossCheckTable({ checks }) {
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div style={{ ...st.label, marginBottom: 6 }}>Declared against demonstrated</div>
+      <div style={st.tableWrap}>
+        <table style={{ ...st.table, minWidth: 620 }}>
+          <thead>
+            <tr>
+              <th style={st.th}>Claim</th>
+              <th style={st.th}>Declared</th>
+              <th style={st.th}>Demonstrated</th>
+              <th style={st.th}>Verdict</th>
+              <th style={st.th}>Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            {checks.map((check) => (
+              <tr key={check.id}>
+                <td style={st.td}>
+                  {check.label === "Airframe" ? "" : <span style={{ fontFamily: MONO, fontSize: 11 }}>{check.label} </span>}
+                  {check.measure}
+                </td>
+                <td style={st.tdMono}>{withUnit(check.declared, check.unit)}</td>
+                <td style={st.tdMono}>
+                  {check.demonstrated === null ? "--" : `${withUnit(check.demonstrated, check.unit)} (n=${check.n})`}
+                </td>
+                <td style={{ ...st.tdMono, fontWeight: 700, color: VERDICTS[check.status].color }}>{VERDICTS[check.status].text}</td>
+                <td style={{ ...st.td, fontSize: 11, color: C.inkMuted, minWidth: 180 }}>
+                  {check.note} {check.source === "Vendor-declared" ? "From the vendor sheet." : ""}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -213,6 +323,7 @@ function ScoreHeader({ pkg }) {
         {scorecard.states.no_benchmark} with no Threshold or Objective stored,{" "}
         {scorecard.states.not_measured} with no measurement yet,{" "}
         {scorecard.states.reported} reported as specifications the criteria do not score,{" "}
+        {scorecard.states.claimed} vendor performance claims not yet demonstrated,{" "}
         {scorecard.states.not_applicable} marked not applicable. Only scored rows enter
         the average, so a row left unbenchmarked lowers coverage rather than the score.
       </p>

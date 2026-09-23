@@ -54,7 +54,8 @@ function meterCounts(system) {
     objective: attainment.objective,
     threshold: attainment.threshold,
     notMet: attainment.notMet,
-    pending: states.no_benchmark + states.not_measured,
+    // A vendor's performance claim is not evidence, so it counts as not yet evidenced.
+    pending: states.no_benchmark + states.not_measured + (states.claimed || 0),
   };
   return {
     counts,

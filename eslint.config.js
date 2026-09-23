@@ -24,6 +24,7 @@ const NODE_GLOBALS = {
 const BROWSER_GLOBALS = {
   window: "readonly",
   document: "readonly",
+  FileReader: "readonly",
   fetch: "readonly",
   AbortController: "readonly",
   setTimeout: "readonly",

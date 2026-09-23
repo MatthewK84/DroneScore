@@ -1,4 +1,5 @@
 import { CRITERIA } from "./criteria.js";
+import { formatQuantity } from "./units.js";
 
 /**
  * Warfighter Observation Report sections for the C-sUAS Capability
@@ -22,6 +23,7 @@ const STATUS_LABELS = Object.freeze({
   not_established: "Not established",
   not_measured: "Not measured",
   stated: "Stated",
+  claimed: "Claimed",
 });
 
 const STATUS_COLORS = Object.freeze({
@@ -31,7 +33,32 @@ const STATUS_COLORS = Object.freeze({
   not_established: "#B98A00",
   not_measured: "#5A6355",
   stated: "#5A6355",
+  claimed: "#B85410",
 });
+
+/**
+ * Marks a figure by where it came from, so a vendor's declaration and a
+ * computed value never pass on the page as a measurement.
+ */
+const SOURCE_MARKS = Object.freeze({ "Vendor-declared": " \u2020", Derived: " \u2021" });
+
+/** @returns {string} The mark for a figure's source, or "". */
+function sourceMark(source) {
+  return SOURCE_MARKS[source] || "";
+}
+
+/** @returns {object} The legend for the source marks. */
+function sourceLegend() {
+  return {
+    text:
+      "\u2020 Declared by the vendor on the data sheet, not demonstrated in test. " +
+      "\u2021 Derived by arithmetic on declared and demonstrated figures; the working is under Vendor Declarations and Derivations.",
+    fontSize: 7,
+    italics: true,
+    color: "#5A6355",
+    margin: [0, 0, 0, 6],
+  };
+}
 
 /** @returns {object} Standard table layout for these sections. */
 function tableLayout() {
@@ -157,13 +184,15 @@ function limitText(value) {
 
 /** @returns {string} The measured column for one compliance row. */
 function measuredText(row) {
+  const mark = sourceMark(row.source);
   if (row.detail) {
-    return row.detail.length > 60 ? `${row.detail.slice(0, 57)}...` : row.detail;
+    return `${row.detail.length > 60 ? `${row.detail.slice(0, 57)}...` : row.detail}${mark}`;
   }
   if (row.measured === null || row.measured === undefined) {
     return "--";
   }
-  return `${row.measured} ${row.units}`.trim();
+  const value = formatQuantity(row.measured, row.units);
+  return `${row.status === "claimed" ? `Claimed ${value}` : value}${mark}`;
 }
 
 /** @returns {object[]} Compliance rows worth printing for a category. */
@@ -191,6 +220,9 @@ function buildComplianceSection(criteria) {
         ` Achieved Objective on ${summary.objective}, met Threshold on ${summary.threshold}, ` +
         `fell short on ${summary.short}. ${summary.not_established} KPPs have no benchmark ` +
         `established and ${summary.not_measured} were not measured on this date. ` +
+        (summary.claimed > 0
+          ? `${summary.claimed} are performance claims from the vendor's data sheet, shown but not scored until demonstrated. `
+          : "") +
         "Section 4.2 requires benchmarks to be documented before test execution, so a " +
         "KPP marked not established is an open action against the evaluation, not a pass.",
       fontSize: 8,
@@ -354,6 +386,7 @@ const STATE_LABELS = Object.freeze({
   reported: "Reported",
   no_benchmark: "No T/O",
   not_measured: "No data",
+  claimed: "Claimed",
 });
 
 /** @returns {object} The Score cell for one scorecard row. */
@@ -375,7 +408,7 @@ function areaTable(section) {
     { text: row.label, bold: true },
     row.measure,
     row.units,
-    row.measuredText || "--",
+    row.measuredText ? `${row.measuredText}${sourceMark(row.source)}` : "--",
     scoreLimit(row.threshold),
     scoreLimit(row.objective),
     scoreCell(row),
@@ -403,6 +436,7 @@ function scorecardSummary(scorecard) {
         `a score. Of the rest: ${scorecard.states.no_benchmark} with no Threshold or ` +
         `Objective stored, ${scorecard.states.not_measured} not measured on this date, ` +
         `${scorecard.states.reported} reported as specifications the criteria do not score, ` +
+        `${scorecard.states.claimed} vendor performance claims not yet demonstrated, ` +
         `${scorecard.states.not_applicable} marked not applicable to this configuration. ` +
         "Only scored rows enter the average: averaging over rows that were never " +
         "benchmarked would let an evaluation raise its score by measuring less.",
@@ -631,6 +665,7 @@ function systemBlocks(pkg, index, stats) {
       pageBreak: index === 0 ? undefined : "before",
     },
     { text: systemNote(pkg), fontSize: 8, margin: [0, 0, 0, 4] },
+    sourceLegend(),
     partHeading("MOP Results"),
     ...buildMopResults(pkg, systemStats(stats, pkg.system.name)),
     partHeading("KPP Threshold and Objective Compliance"),
@@ -639,7 +674,90 @@ function systemBlocks(pkg, index, stats) {
     ...buildScorecardSection(pkg),
     partHeading("Engagement Timeline Analysis"),
     ...buildTimelineSection(pkg),
+    partHeading("Vendor Declarations and Derivations"),
+    ...buildDeclarationSection(pkg),
   ];
+}
+
+const VERDICT_TEXT = Object.freeze({
+  consistent: { text: "Consistent", color: "#2E7D32" },
+  shortfall: { text: "Shortfall", color: "#B3261E" },
+  inconsistent: { text: "Inconsistent", color: "#B3261E" },
+  untested: { text: "Untested", color: "#5A6355" },
+});
+
+/** @returns {string} A cross-check figure with its unit, or a dash. */
+function figure(value, unit) {
+  return value === null || value === undefined ? "--" : `${value} ${unit}`.trim();
+}
+
+/** @returns {object} The derived values table, each with its full working. */
+function derivationTable(derivations) {
+  const body = derivations.map((entry) => [
+    { text: entry.id, bold: true },
+    entry.measure,
+    entry.value === null ? "--" : `${typeof entry.value === "number" ? entry.value.toLocaleString("en-US") : entry.value} ${typeof entry.value === "number" ? entry.units : ""}`.trim(),
+    { text: [entry.basis, ...(entry.warnings || []).map((warning) => ` Warning: ${warning}`)].join(""), fontSize: 6.5 },
+  ]);
+  return {
+    table: { headerRows: 1, widths: [36, 80, 70, "*"], body: [headerRow(["ID", "Measure", "Value", "Working"]), ...body] },
+    layout: tableLayout(),
+    fontSize: 7,
+    margin: [0, 0, 0, 8],
+  };
+}
+
+/** @returns {object} Every declared claim held against what the runs showed. */
+function crossCheckTable(checks) {
+  const body = checks.map((check) => [
+    { text: check.label === "Airframe" ? check.measure : `${check.label} ${check.measure}`, bold: true },
+    figure(check.declared, check.unit),
+    check.demonstrated === null ? "--" : `${figure(check.demonstrated, check.unit)} (n=${check.n})`,
+    { text: VERDICT_TEXT[check.status].text, bold: true, color: VERDICT_TEXT[check.status].color },
+    { text: `${check.note || ""} Source: ${check.source}.`, fontSize: 6.5 },
+  ]);
+  return {
+    table: {
+      headerRows: 1,
+      widths: [96, 54, 70, 52, "*"],
+      body: [headerRow(["Claim", "Declared", "Demonstrated", "Verdict", "Note"]), ...body],
+    },
+    layout: tableLayout(),
+    fontSize: 7,
+    margin: [0, 0, 0, 8],
+  };
+}
+
+/**
+ * The derivation engine's output for one system: what it computed and how,
+ * which UAS groups the interceptor can outrun, and every declared claim
+ * held against the runs.
+ *
+ * @returns {object[]}
+ */
+function buildDeclarationSection(pkg) {
+  const blocks = [
+    {
+      text:
+        "Values below are computed, never estimated: each shows its arithmetic, and one missing an " +
+        "input names the input rather than guessing it. No probability is produced from a " +
+        "specification; a vendor's performance claim is only ever compared with what the runs showed.",
+      fontSize: 8,
+      margin: [0, 0, 0, 6],
+    },
+    derivationTable(pkg.derivations || []),
+  ];
+  if ((pkg.speedAdvantage || []).length > 0) {
+    blocks.push({ text: "Declared top speed against UAS group ceilings", bold: true, fontSize: 8, margin: [0, 2, 0, 3] });
+    blocks.push({ ul: pkg.speedAdvantage.map((entry) => entry.text), fontSize: 7.5, margin: [0, 0, 0, 8] });
+  }
+  if ((pkg.crossChecks || []).length === 0) {
+    blocks.push({ text: "No declared claim for this system can be compared with the runs.", italics: true, fontSize: 8 });
+    return blocks;
+  }
+  blocks.push({ text: "Declared against demonstrated", bold: true, fontSize: 8, margin: [0, 2, 0, 3] });
+  blocks.push(crossCheckTable(pkg.crossChecks));
+  return blocks;
 }
 
 /** @returns {object[]} Section 9: the full characterization of every system. */

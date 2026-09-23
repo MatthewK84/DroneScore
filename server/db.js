@@ -123,6 +123,30 @@ const SCHEMA_STATEMENTS = [
   // the framework will revise, so keys absorb revisions without migrations.
   `ALTER TABLE interceptors ADD COLUMN IF NOT EXISTS profile JSONB NOT NULL DEFAULT '{}'::jsonb`,
 
+  // Where each profile value came from, keyed like the profile. A value
+  // imported from a vendor data sheet is the vendor's declaration, and a
+  // performance claim so declared never scores. Values with no entry here
+  // were entered by an evaluator.
+  `ALTER TABLE interceptors ADD COLUMN IF NOT EXISTS profile_sources JSONB NOT NULL DEFAULT '{}'::jsonb`,
+
+  // Vendor data sheets as received. The C4 criteria require evidence behind
+  // every entry, so the completed PDF is kept, not just the values read out
+  // of it. A sheet is read and previewed first, and applied to the profile
+  // only when an admin confirms.
+  `CREATE TABLE IF NOT EXISTS vendor_documents (
+    id BIGSERIAL PRIMARY KEY,
+    interceptor_id BIGINT NOT NULL REFERENCES interceptors(id) ON DELETE CASCADE,
+    filename TEXT NOT NULL DEFAULT '',
+    pdf BYTEA NOT NULL,
+    meta JSONB NOT NULL DEFAULT '{}'::jsonb,
+    sheet_values JSONB NOT NULL DEFAULT '{}'::jsonb,
+    rejected JSONB NOT NULL DEFAULT '[]'::jsonb,
+    status TEXT NOT NULL DEFAULT 'previewed',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    applied_at TIMESTAMPTZ
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_vendor_documents_interceptor ON vendor_documents(interceptor_id)`,
+
   // Section 4.2 requires Threshold and Objective to be documented before
   // test execution. interceptor_id NULL means the benchmark applies to every
   // system under test; uas_group '' means it applies to every target group.

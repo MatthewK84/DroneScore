@@ -70,15 +70,15 @@ export function CriteriaTab({ isAdmin }) {
     <div>
       <ViewBar view={view} onSelect={setView} />
       {error ? <p style={st.error}>{error}</p> : null}
-      <CriteriaView view={view} catalog={catalog} interceptors={interceptors} isAdmin={isAdmin} />
+      <CriteriaView view={view} catalog={catalog} interceptors={interceptors} isAdmin={isAdmin} onReload={reload} />
     </div>
   );
 }
 
 /** @returns {JSX.Element} The panel for the selected view. */
-function CriteriaView({ view, catalog, interceptors, isAdmin }) {
+function CriteriaView({ view, catalog, interceptors, isAdmin, onReload }) {
   if (view === "profile") {
-    return <SystemProfilePanel catalog={catalog} interceptors={interceptors} isAdmin={isAdmin} />;
+    return <SystemProfilePanel catalog={catalog} interceptors={interceptors} isAdmin={isAdmin} onChanged={onReload} />;
   }
   if (view === "benchmarks") {
     return <BenchmarksPanel catalog={catalog} interceptors={interceptors} isAdmin={isAdmin} />;

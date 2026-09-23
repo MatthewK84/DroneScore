@@ -17,6 +17,7 @@
 
 import { C4_AREAS, C4_SUPPORTING, naKey, narrativeKey, verdictKey } from "./c4.js";
 import { flattenMops } from "./criteria.js";
+import { formatQuantity } from "./units.js";
 
 /** Compliance statuses mapped onto the 0/1/2 scale the criteria define. */
 const SCORE_FOR_STATUS = Object.freeze({
@@ -30,6 +31,7 @@ const STATE_FOR_STATUS = Object.freeze({
   not_established: "no_benchmark",
   not_measured: "not_measured",
   stated: "reported",
+  claimed: "claimed",
 });
 
 /** Verdict answers that count as meeting the row. */
@@ -166,14 +168,16 @@ function scoreCatalogRow(row, complianceById) {
     return { measured: null, measuredText: "", score: null, state: "not_measured", source: "", notes: "" };
   }
   const score = SCORE_FOR_STATUS[record.status];
-  const measuredText = record.detail || (record.measured === null ? "" : `${record.measured} ${row.units}`.trim());
+  const value = record.detail || (record.measured === null ? "" : formatQuantity(record.measured, row.units));
   return {
     measured: record.measured,
-    measuredText,
+    measuredText: record.status === "claimed" ? `Claimed ${value}` : value,
     score: score === undefined ? null : score,
     state: score === undefined ? STATE_FOR_STATUS[record.status] || "not_measured" : "scored",
     source: record.source || "",
-    notes: record.basis || "",
+    // A derived value's arithmetic is the note a reader needs; otherwise the
+    // basis of the benchmark it was judged against.
+    notes: record.derivation || record.basis || "",
   };
 }
 
@@ -223,7 +227,7 @@ function scoreRow(row, context) {
 
 /** @returns {object} Counts of every row state inside a collection. */
 function countStates(rows) {
-  const counts = { scored: 0, not_applicable: 0, reported: 0, no_benchmark: 0, not_measured: 0 };
+  const counts = { scored: 0, not_applicable: 0, reported: 0, no_benchmark: 0, not_measured: 0, claimed: 0 };
   for (const row of rows) {
     if (Object.hasOwn(counts, row.state)) {
       counts[row.state] += 1;

@@ -269,6 +269,10 @@ Each service: React SPA + Express (server/)
   c4.js           the C4 scorecard structure, as the criteria print it
   c4-score.js     0/1/2/NA scoring, area rollup, Critical KPP flag
   systems.js      per-interceptor packages and cumulative board progress
+  vendor-template.js  the fillable vendor data sheet, generated from the catalog, and its reader
+  units.js        unit conversion for declared values; refuses ranges and prose
+  derivations.js  criteria computed from declarations and runs, and claim cross-checks
+  provenance.js   which profile values came from a vendor sheet
   wor.js          pdfmake vector report builder
 ```
 
@@ -303,6 +307,20 @@ The database schema is created at boot; there is no separate migration step.
   pages. Every system documented on a day shares that day's range space, so the
   day closeout counters apply to each of them in full. Runs logged with no
   interceptor are counted and excluded from every system.
+- System profiles can be filled from a vendor data sheet: a fillable PDF
+  generated from the catalog, one box per criterion in a stated unit. An import
+  shows what it would change and writes nothing until an admin applies it;
+  anything it cannot read exactly is refused with the reason, never guessed.
+  The completed PDF is kept as evidence.
+- A vendor's performance claim (a probability or accuracy) is shown beside what
+  the runs demonstrated and never scored from the sheet. Physical specifications
+  from the sheet score, labelled as vendor-declared. An evaluator who edits an
+  imported value takes it over.
+- The derivation engine computes criteria that follow from declared and
+  demonstrated figures together (cost per engagement, sustained defeats an
+  hour, loaded endurance, the intercept envelope) and shows the arithmetic for
+  each. It never estimates, and never produces a probability from a
+  specification.
 - The criteria flag a system "Not Militarily Effective" when a Critical KPP
   scores 0, but do not say which KPPs are critical. That is declared by the
   evaluator on the benchmark record, beside the Threshold and Objective, and is

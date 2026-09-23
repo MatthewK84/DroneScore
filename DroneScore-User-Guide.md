@@ -315,8 +315,28 @@ measured row.
 
 A row with no score shows why instead: `No T/O` (no benchmark stored),
 `No data` (benchmarked but not yet measured), `Reported` (a specification the
-criteria do not score), or `N/A`. None of these count as a pass, and none
-enters the average.
+criteria do not score), `Claimed` (a performance figure from the vendor's data
+sheet that no run has demonstrated yet), or `N/A`. None of these count as a
+pass, and none enters the average.
+
+**Vendor Declarations and Derivations.** Below the timeline, the derivation
+engine's working for the system shown:
+
+- **Derived values.** Battery life (9.1), cost per engagement (5.8), sustained
+  defeats an hour (5.3), and the intercept envelope (INT-3), each with its
+  arithmetic written out. One missing an input says which input, rather than
+  guessing it.
+- **Top speed against each UAS group's ceiling:** which groups the interceptor
+  can run down in a tail chase at all.
+- **Declared against demonstrated:** every claim from the sheet held against
+  what the runs showed: *Consistent*, *Shortfall*, *Inconsistent* (the runs
+  contradict the claim, e.g. a defeat implying a speed faster than the declared
+  top speed, which means a claim, a range, or a time is wrong), or *Untested*
+  (no run captures it: seeker lock, miss distance, and engagement geometry
+  aren't logged).
+
+The engine computes; it never estimates. Nothing on this card produces a
+probability from a specification.
 
 **Not Militarily Effective.** If a row marked Critical scores 0, a red banner
 names it and the system carries that flag. Which KPPs are Critical is the
@@ -346,6 +366,33 @@ Read this view before closing the day. A row showing `No T/O` is still fixable
 at the range. Once the report is generated it is a finding.
 
 ### System Profile (admin)
+
+**Vendor Data Sheet.** The fast way to fill a profile. *Download blank sheet*
+gives a fillable PDF generated from the criteria catalog: one box per
+criterion, each in a stated unit, with a unit list beside every number that
+could be written in more than one. Send it to the vendor before testing.
+
+When it comes back, *Import completed sheet* reads it and shows exactly what
+it would change (new, changed, the same) before anything is written. Anything
+it can't read exactly is listed as *Not imported*, with the reason, rather than
+guessed at: a range such as `290-340`, a number with a unit typed into it, a
+percentage over 100. *Apply* writes the rest in one step; *Discard* writes
+nothing. A sheet that was printed to PDF or flattened has lost its boxes and is
+refused; ask the vendor for the saved fillable form. Every sheet received stays
+listed with a *PDF* link as evidence.
+
+Imported values carry a badge: **From vendor sheet**, or **Vendor claim, not
+scored** on the performance claims (detection and classification probability,
+tracking accuracy, kinetic Pk, probability of lock, CEP, geometry Pk). A claim
+from the sheet is shown on the scorecard but never scored from the sheet; it
+scores once runs demonstrate it. If you edit an imported value, it becomes
+yours and the badge drops, and an evaluator-entered figure scores normally.
+
+**Interceptor Airframe.** Cruise speed, flight time with and without payload,
+working range, maximum altitude, and interceptor weight. These aren't criteria
+themselves; they feed the derivation engine. The sheet asks for the loaded
+flight time separately because that, not unloaded endurance, bounds an
+intercept.
 
 Pick an interceptor, answer what applies. Every control is generated from the
 KPP catalog, grouped by framework section: Detect, Track, Identify and
@@ -491,7 +538,7 @@ the Capability Characterization additions, broken out by interceptor.
 | 6 | Scorer observations, verbatim |
 | 7 | Assessment narrative |
 | 8 | System comparison — every interceptor flown, side by side: runs, Pk, the five area scores, overall, rows scored, and effectiveness status |
-| 9 | Characterization by system — for each interceptor on its own pages (9.1, 9.2, …): MOP results with n and basis, KPP compliance, the C4 scorecard, and the engagement timeline |
+| 9 | Characterization by system — for each interceptor on its own pages (9.1, 9.2, …): MOP results with n and basis, KPP compliance, the C4 scorecard, the engagement timeline, and vendor declarations and derivations. A † marks a figure declared on the vendor's data sheet; a ‡ marks one the engine derived |
 | 10 | Test matrix coverage — achieved against required data points |
 | 11 | Benchmark basis — the reasoning behind every number used |
 

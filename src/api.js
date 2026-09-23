@@ -232,6 +232,36 @@ export function saveSystemProfile(interceptorId, profile) {
   return request("PUT", `/interceptors/${interceptorId}/profile`, { profile });
 }
 
+/**
+ * The blank vendor data sheet. A plain link downloads it: the session
+ * cookie rides along, and the server sends it as an attachment.
+ */
+export const VENDOR_TEMPLATE_URL = "/api/vendor-template.pdf";
+
+/** @returns {string} Download link for a stored vendor data sheet. */
+export function vendorDocumentUrl(documentId) {
+  return `/api/vendor-documents/${documentId}/pdf`;
+}
+
+/**
+ * Reads a completed vendor data sheet and returns what applying it would
+ * change. Nothing is written to the profile by this call.
+ * @returns {Promise<object>}
+ */
+export function uploadVendorSheet(interceptorId, filename, base64) {
+  return request("POST", `/interceptors/${interceptorId}/vendor-sheet`, { filename, data: base64 });
+}
+
+/** @returns {Promise<{ written: number }>} Applies a previewed sheet to the profile. */
+export function applyVendorSheet(documentId) {
+  return request("POST", `/vendor-documents/${documentId}/apply`);
+}
+
+/** @returns {Promise<{ documents: object[] }>} Data sheets received for a system. */
+export function listVendorDocuments(interceptorId) {
+  return request("GET", `/interceptors/${interceptorId}/vendor-documents`);
+}
+
 /** @returns {Promise<object>} */
 export function saveDayMetrics(dayId, metrics) {
   return request("PUT", `/days/${dayId}/metrics`, metrics);

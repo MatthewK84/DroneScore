@@ -148,6 +148,7 @@ export function createCatalogRouter(pool) {
         // The Criteria tab edits this. Defaulting to an empty object rather
         // than passing null through keeps every consumer off a null check.
         profile: row.profile || {},
+        profileSources: row.profile_sources || {},
       }));
       return res.json({ success: true, interceptors });
     } catch (error) {
