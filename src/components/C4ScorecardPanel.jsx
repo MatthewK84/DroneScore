@@ -59,6 +59,7 @@ export function C4ScorecardPanel({ isAdmin, interceptors }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [busyRow, setBusyRow] = useState("");
+  const [selectedId, setSelectedId] = useState(null);
 
   const reload = useCallback(async () => {
     try {
@@ -76,9 +77,19 @@ export function C4ScorecardPanel({ isAdmin, interceptors }) {
     reload();
   }, [reload]);
 
+  /**
+   * The system being shown. Each interceptor flown today has its own
+   * package, derived from its own runs; the primary system opens first.
+   * A selection that no longer exists after a reload falls back to it.
+   */
+  const shown = useMemo(() => {
+    const packages = review?.systems || [];
+    return packages.find((pkg) => pkg.system.interceptorId === selectedId) || packages[0] || review;
+  }, [review, selectedId]);
+
   const system = useMemo(
-    () => interceptors.find((entry) => entry.id === review?.system?.interceptorId) || null,
-    [interceptors, review]
+    () => interceptors.find((entry) => entry.id === shown?.system?.interceptorId) || null,
+    [interceptors, shown]
   );
 
   /**
@@ -116,9 +127,15 @@ export function C4ScorecardPanel({ isAdmin, interceptors }) {
   const canMark = isAdmin && system !== null;
   return (
     <div>
-      <ScoreHeader scorecard={review.scorecard} system={review.system} group={review.uasGroup} />
+      <SystemPicker
+        systems={review.systems || []}
+        selectedId={shown.system.interceptorId}
+        onSelect={setSelectedId}
+        unassigned={review.unassignedRuns || 0}
+      />
+      <ScoreHeader pkg={shown} />
       {error ? <p style={st.error}>{error}</p> : null}
-      {review.scorecard.areas.map((area) => (
+      {shown.scorecard.areas.map((area) => (
         <AreaCard
           key={area.id}
           area={area}
@@ -127,14 +144,63 @@ export function C4ScorecardPanel({ isAdmin, interceptors }) {
           onToggle={toggleNotApplicable}
         />
       ))}
-      <SupportingCard groups={review.scorecard.supporting} />
-      <TimelineCard timeline={review.timeline} />
+      <SupportingCard groups={shown.scorecard.supporting} />
+      <TimelineCard timeline={shown.timeline} />
+    </div>
+  );
+}
+
+/**
+ * One chip per interceptor flown today, each with its overall score, so
+ * the systems can be compared at a glance before opening one. Hidden when
+ * only one system flew, because there is nothing to choose between.
+ */
+function SystemPicker({ systems, selectedId, onSelect, unassigned }) {
+  if (systems.length < 2 && unassigned === 0) {
+    return null;
+  }
+  return (
+    <div style={st.card}>
+      <h2 style={st.secHead}>Systems Flown Today</h2>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {systems.map((pkg) => {
+          const active = pkg.system.interceptorId === selectedId;
+          return (
+            <button
+              key={pkg.system.interceptorId}
+              onClick={() => onSelect(pkg.system.interceptorId)}
+              style={{
+                ...st.ghostBtn,
+                textTransform: "none",
+                letterSpacing: 0,
+                fontFamily: MONO,
+                fontSize: 12,
+                borderColor: active ? C.olive : C.line,
+                color: active ? C.olive : C.inkMuted,
+                background: active ? C.oliveSoft : "transparent",
+              }}
+            >
+              {pkg.system.name} · {outOfTwo(pkg.scorecard.overall)}
+              {pkg.scorecard.notMilitarilyEffective ? " · NME" : ""}
+            </button>
+          );
+        })}
+      </div>
+      <p style={{ ...st.meta, marginTop: 10 }}>
+        Each system is scored from its own runs only. Day closeout counters are recorded once per
+        day and apply to the primary system, listed first.
+        {unassigned > 0
+          ? ` ${unassigned} ${unassigned === 1 ? "run names" : "runs name"} no interceptor and ${unassigned === 1 ? "is" : "are"} not counted toward any system.`
+          : ""}
+      </p>
     </div>
   );
 }
 
 /** Overall System Score, the five area scores, and the effectiveness flag. */
-function ScoreHeader({ scorecard, system, group }) {
+function ScoreHeader({ pkg }) {
+  const { scorecard, system } = pkg;
+  const group = pkg.uasGroup;
   return (
     <div style={st.card}>
       <h2 style={st.secHead}>Overall System Score</h2>
@@ -159,7 +225,7 @@ function ScoreHeader({ scorecard, system, group }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(96px, 1fr))", gap: 8, marginTop: 12 }}>
         {scorecard.areas.map((area) => (
           <div key={area.id} style={{ textAlign: "center", padding: "8px 4px", border: `1px solid ${C.line}`, borderRadius: 8 }}>
-            <div style={st.stripLabel}>Criterion {area.id}</div>
+            <div style={{ ...st.stripLabel, color: C.inkMuted }}>Criterion {area.id}</div>
             <div style={{ fontFamily: MONO, fontSize: 20, color: area.score === null ? C.inkMuted : C.olive }}>
               {area.score === null ? "--" : area.score.toFixed(2)}
             </div>
@@ -174,9 +240,9 @@ function ScoreHeader({ scorecard, system, group }) {
       </p>
       <p style={{ ...st.meta, marginTop: 6 }}>
         System under test: {system.name || "none logged"}
-        {group ? ` against Group ${group}` : ""}.
-        {system.others.length > 0
-          ? ` Runs were also logged for ${system.others.join(", ")}; those are not blended in.`
+        {group ? ` against Group ${group}` : ""}, scored from its own runs only.
+        {pkg.countersAttributed === false
+          ? " Day closeout counters belong to the day's primary system, so the rows they feed are not measured here."
           : ""}
       </p>
     </div>

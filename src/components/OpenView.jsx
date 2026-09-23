@@ -1,11 +1,13 @@
 import { getPublicDay } from "../api.js";
 import { usePolledResource } from "../hooks.js";
 import { C, MONO, pillStyle, st } from "../styles.js";
+import { CriteriaProgress } from "./CriteriaProgress.jsx";
 import { Loading } from "./ui.jsx";
 import { WeatherPanel } from "./WeatherPanel.jsx";
 
 /**
- * Open View for the viewer role: a single running tally sheet. It shows
+ * Open View for the viewer role: a running tally sheet and each
+ * interceptor's progress toward JIATF 401 C4 criteria compliance. It shows
  * the live range weather and today's scored items, each with the weather
  * captured at scoring time. No tabs, no fleet, no schedule, no feedback,
  * no reports, and no way to edit anything. Polls so the tally tracks
@@ -93,7 +95,7 @@ export function OpenView({ onSignOut }) {
       <header style={st.header}>
         <div>
           <h1 style={st.brand}>Drone Smoke</h1>
-          <div style={st.brandSub}>Score Tally</div>
+          <div style={st.brandSub}>Score Tally and Criteria Progress</div>
         </div>
         <div style={st.roleRow}>
           <span style={pillStyle(C.inkMuted)}>Read Only</span>
@@ -108,6 +110,7 @@ export function OpenView({ onSignOut }) {
       ) : (
         <div>
           <DayStrip day={data?.day} stats={data?.stats} isToday={isCurrentDay(data?.day)} />
+          <CriteriaProgress />
           <WeatherPanel />
           <TallySheet
             engagements={data?.engagements || []}

@@ -1,14 +1,21 @@
 import express from "express";
 import { computeDayStats } from "../analytics.js";
 import { requireRole } from "../auth.js";
+import { buildProgress } from "../systems.js";
 import { operationalDate } from "../time.js";
 
 /**
- * Read-only tally for the viewer role. Viewers see exactly one thing:
- * today's scored items with the weather captured at scoring time, plus
- * the day rollup. Fleet, schedule, feedback, past days, and reports are
- * not exposed here, so the general population sees the tally and nothing
- * else. Scorers and admins use the full authed routes instead.
+ * Read-only routes for the viewer role, which is the general population.
+ * Viewers see two things: today's scored items with the weather captured at
+ * scoring time and the day rollup, and each interceptor's progress toward
+ * JIATF 401 C4 criteria compliance.
+ *
+ * Progress is published as scores and counts only. Measured values,
+ * Threshold and Objective figures, benchmark bases, and anything from the
+ * system profile stay behind the scorer and admin routes: the profile holds
+ * accreditation dates and cybersecurity findings, and a benchmark tells a
+ * reader exactly what performance the evaluation will accept. Fleet,
+ * schedule, feedback, past days, and reports are not exposed here either.
  */
 
 /** @returns {object} Public shape of a day row. */
@@ -87,6 +94,36 @@ export function createReadonlyRouter(pool, config) {
     } catch (error) {
       console.error("Public day failed:", error?.message);
       return res.status(500).json({ success: false, error: "Failed to load the day." });
+    }
+  });
+
+  /**
+   * Cumulative progress of every interceptor, scored on every run it has
+   * flown across the whole evaluation. Recomputed on each request; the
+   * board polls it slowly because progress moves by the run, not the second.
+   */
+  router.get("/public/progress", async (_req, res) => {
+    try {
+      const engagements = await pool.query(
+        `SELECT e.*, to_char(dy.day_date, 'YYYY-MM-DD') AS day_date, d.uas_group,
+                i.name AS interceptor_name, i.profile AS interceptor_profile
+         FROM engagements e
+         JOIN days dy ON dy.id = e.day_id
+         LEFT JOIN drones d ON d.id = e.drone_id
+         LEFT JOIN interceptors i ON i.id = e.interceptor_id
+         ORDER BY e.occurred_at ASC`
+      );
+      const days = await pool.query(
+        `SELECT id, to_char(day_date, 'YYYY-MM-DD') AS day_date, false_alarms, operating_minutes,
+                system_aborts, repair_minutes, operate_crew, setup_crew, setup_minutes
+         FROM days ORDER BY day_date ASC`
+      );
+      const benchmarks = await pool.query("SELECT * FROM benchmarks");
+      const progress = buildProgress(engagements.rows, days.rows, benchmarks.rows, config.timezone);
+      return res.json({ success: true, ...progress });
+    } catch (error) {
+      console.error("Public progress failed:", error?.message);
+      return res.status(500).json({ success: false, error: "Failed to load criteria progress." });
     }
   });
 

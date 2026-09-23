@@ -260,3 +260,10 @@ test("the catalog is well formed and free of duplicate ids", () => {
   assert.equal(isKnownKppId("99.9"), false);
   assert.ok(catalogForTier("system").length > 40);
 });
+
+test("catalog labels never repeat a prefix the id already carries", () => {
+  const labels = KPP_CATALOG.map((entry) => entry.label);
+  assert.ok(labels.includes("INT-1"));
+  assert.ok(labels.includes("KPP 5.4e"));
+  assert.equal(labels.some((label) => label.startsWith("INT INT")), false);
+});

@@ -220,7 +220,8 @@ function buildCatalog() {
           ...entry,
           category: category.name,
           section: category.section,
-          label: `${entry.kind} ${entry.id}`,
+          // Interceptor metric ids already carry their own prefix: "INT-1", not "INT INT-1".
+          label: entry.kind === "INT" ? entry.id : `${entry.kind} ${entry.id}`,
         })
       );
     }

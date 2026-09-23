@@ -3,11 +3,9 @@ import SunCalc from "suncalc";
 import { compactDate, formatDateLong, formatTimeLocal } from "./time.js";
 import {
   buildBasisSection,
-  buildComplianceSection,
-  buildCriteriaSection,
   buildMatrixSection,
-  buildScorecardSection,
-  buildTimelineSection,
+  buildSystemComparisonSection,
+  buildSystemSections,
 } from "./wor-criteria.js";
 
 /**
@@ -389,19 +387,15 @@ function buildDocDefinition(input) {
       heading(7, "Assessment"),
       { text: buildNarrative(stats) },
       { text: "", pageBreak: "before" },
-      heading(8, "Capability Characterization: MOP Results"),
-      ...buildCriteriaSection(input.criteria, stats),
-      heading(9, "Key Performance Benchmarks: Threshold and Objective Compliance"),
-      ...buildComplianceSection(input.criteria),
+      heading(8, "Capability Characterization: System Comparison"),
+      ...buildSystemComparisonSection(input.criteria, stats),
+      heading(9, "Capability Characterization by System"),
+      ...buildSystemSections(input.criteria, stats),
+      { text: "", pageBreak: "before" },
       heading(10, "Test Matrix Coverage"),
       ...buildMatrixSection(input.criteria),
       heading(11, "Benchmark Basis"),
       ...buildBasisSection(input.criteria),
-      { text: "", pageBreak: "before" },
-      heading(12, "C4 Scorecard: Core Capability Areas"),
-      ...buildScorecardSection(input.criteria),
-      heading(13, "Engagement Timeline Analysis"),
-      ...buildTimelineSection(input.criteria),
     ],
   };
 }

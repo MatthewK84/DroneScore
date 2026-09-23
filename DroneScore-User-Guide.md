@@ -90,8 +90,13 @@ until an admin reopens the day.
 ### C4 Scorecard, live
 
 Under the scoreboard, the Overall System Score out of 2 and the five Core
-Capability Area scores, refreshed every time you log a run. If a Critical KPP
-scores 0, the Not Militarily Effective banner appears here too.
+Capability Area scores, refreshed every time you log a run — one line per
+interceptor flown today. If a Critical KPP scores 0, that system's line carries
+the Not Militarily Effective banner.
+
+Each interceptor is scored from **its own runs only**. Logging a KI-1 run moves
+KI-1's line and nothing else; two systems flown on the same day are two
+evaluations that happen to share a range.
 
 You do nothing to produce this. Logging an engagement is the only action
 involved: every criteria row that run bears on is measured, scored, and rolled
@@ -273,6 +278,19 @@ The default view, and the criteria document itself: the five Core Capability
 Areas, every row each of them prints, in the document's order and with the
 document's columns.
 
+**Systems Flown Today.** When more than one interceptor has flown, a row of
+buttons at the top — one per system, each showing its overall score and `NME`
+if it is flagged — switches the whole scorecard between them. The primary
+system (the one flown on the most intercept runs) is listed first and opens
+by default.
+
+Day closeout counters — false alarms, operating minutes, system aborts, repair
+time, crew, setup time — are entered once per day, not per system, so they are
+attributed to the primary system only. For any other system the rows they feed
+(MOP 1.1.4, 4.2.1, 4.2.2 and the workload and setup KPPs) read *No data*, and
+the scorecard says why. Runs logged with no interceptor selected belong to no
+system and are counted but excluded.
+
 **Nothing on this screen asks you for a number.** The Measured column fills
 itself from the runs already logged on the Score tab. Logging an engagement
 scores every row that engagement bears on, and the score you see here is the
@@ -344,7 +362,7 @@ of them are answered here once rather than asked for run by run.
 At the bottom, six narrative fields for the qualitative MOPs of Criteria 4 and
 5: co-located system impact, HERO/HERP/HERF, RMF compliance and ATO/ATC status,
 contested environment, hazard prevention, collateral damage mitigation. What
-you write prints verbatim in report section 8.
+you write prints verbatim in report section 9, under that system.
 
 Each of those six now carries a **scorecard verdict** beside it — Yes/No or
 Pass/Fail depending on the row. The narrative is the evidence; the verdict is
@@ -429,12 +447,39 @@ Viewers get a live tally: date, runs, intercepts, Pk, and the day's log with
 outcome colours. It updates on its own. Nothing on it can be edited by anyone,
 regardless of role.
 
+### JIATF 401 Criteria Progress
+
+Under the scoreboard, one panel per interceptor showing its progress toward C4
+criteria compliance, **scored cumulatively across every day it has flown**:
+
+- **Overall score** out of 2, and **Criteria met** — rows at or above
+  Threshold, out of the rows that can be scored.
+- **The progress bar** splits those rows into Objective met, Threshold met,
+  Not met, and Not yet evidenced. The legend beside it always shows the counts.
+  Rows marked not applicable, and specification rows the criteria do not score,
+  sit outside the bar and are counted underneath it.
+- **Crit 1–5** — each Core Capability Area's score and how many of its rows
+  are scored.
+- **Overall score by day** — the score after each day that system flew, with
+  the change since its first day. Open *By day* for the same figures as a table.
+- **Not Militarily Effective**, with the Critical KPPs that scored 0, when any did.
+
+The board publishes **scores and counts only**. Measured values, Threshold and
+Objective figures, benchmark bases, and everything on the system profile stay
+behind the scorer and admin logins.
+
+**The board and the Score tab can legitimately disagree.** The Score tab and
+Criteria tab score *today*; the board scores the *whole evaluation*. A system
+that had a bad day can be flagged on the Score tab while its cumulative record
+on the board is not, and the reverse. Neither is wrong; they answer different
+questions. When briefing, say which one you are quoting.
+
 ---
 
 ## 9. Reading the report
 
 Eleven sections. Sections 1 through 7 are the original report; 8 through 11 are
-the Capability Characterization additions.
+the Capability Characterization additions, broken out by interceptor.
 
 | § | Contents |
 |---|---|
@@ -445,16 +490,16 @@ the Capability Characterization additions.
 | 5 | Performance analysis by interceptor, target, group, and period |
 | 6 | Scorer observations, verbatim |
 | 7 | Assessment narrative |
-| 8 | Capability Characterization — MOP results per criterion, each with n and basis |
-| 9 | KPP compliance — measured, Threshold, Objective, verdict, by category |
+| 8 | System comparison — every interceptor flown, side by side: runs, Pk, the five area scores, overall, rows scored, and effectiveness status |
+| 9 | Characterization by system — for each interceptor on its own pages (9.1, 9.2, …): MOP results with n and basis, KPP compliance, the C4 scorecard, and the engagement timeline |
 | 10 | Test matrix coverage — achieved against required data points |
 | 11 | Benchmark basis — the reasoning behind every number used |
 
-### Why section 5 and section 8 can show different Pk values
+### Why section 5 and section 9 can show different Pk values
 
 They answer different questions, and the report says so wherever they diverge.
 
-Section 5 divides successes by every attempted run. MOP 3.1.2 in section 8
+Section 5 divides successes by every attempted run. MOP 3.1.2 in section 9
 divides defeats by the runs that actually reached the **engage** stage. A run
 that lost track before launch is an attempt under the first definition and not
 an engagement under the second.
@@ -463,7 +508,7 @@ Where stage data was captured, MOP 3.1.2 is the figure that answers Criterion 3.
 On runs logged before stage capture existed, the two agree exactly, so no
 historical number has moved.
 
-### Verdict labels in section 9
+### Verdict labels in section 9 (KPP compliance)
 
 | Label | Meaning |
 |---|---|
@@ -493,7 +538,7 @@ comes back into the form.
 **The day closed too early:** admin reopens from the Day tab, you keep scoring,
 admin closes again. The new report gets sequence `-02`.
 
-**Something looks wrong on the report:** check the basis column in section 8
+**Something looks wrong on the report:** check the basis column of the MOP tables in section 9
 first. Most surprises are a measure reading `inferred from outcome` when you
 expected it to be captured, which means stage was not recorded on those runs.
 

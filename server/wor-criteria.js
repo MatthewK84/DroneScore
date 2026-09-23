@@ -107,7 +107,7 @@ function reconcilePk(criteria, stats) {
   return [
     {
       text:
-        `Section 5 reports Pk ${outcomePk.toFixed(2)} and MOP 3.1.2 reports ` +
+        `Section 5 reports this system's Pk as ${outcomePk.toFixed(2)} and MOP 3.1.2 reports ` +
         `Pk ${derived.value.toFixed(2)}. Both are correct under their own definition. ` +
         "Section 5 divides successes by every attempted run. MOP 3.1.2 divides defeats " +
         `by the ${derived.n} runs that reached the engage stage, excluding runs that ` +
@@ -119,24 +119,23 @@ function reconcilePk(criteria, stats) {
   ];
 }
 
-/** @returns {object[]} Section 8: derived MOP results per criterion. */
-export function buildCriteriaSection(criteria, stats) {
-  if (!criteria) {
-    return [{ text: "Capability characterization data was unavailable.", italics: true }];
-  }
-  const blocks = [
-    {
-      text:
-        "Measures of Performance derived under section 4.1. The Basis column states " +
-        "whether each figure was captured at the kill chain stage picker, inferred " +
-        "from the run outcome, or taken from day closeout entries. An inferred " +
-        "proportion is not a measurement of that stage and should not be read as one.",
-      fontSize: 8,
-      italics: true,
-      margin: [0, 0, 0, 8],
-    },
-    ...reconcilePk(criteria, stats),
-  ];
+/** @returns {object} The note explaining the Basis column of every MOP table. */
+function mopIntro() {
+  return {
+    text:
+      "Measures of Performance derived under section 4.1. The Basis column states " +
+      "whether each figure was captured at the kill chain stage picker, inferred " +
+      "from the run outcome, or taken from day closeout entries. An inferred " +
+      "proportion is not a measurement of that stage and should not be read as one.",
+    fontSize: 8,
+    italics: true,
+    margin: [0, 0, 0, 8],
+  };
+}
+
+/** @returns {object[]} Derived MOP results per criterion for one system. */
+function buildMopResults(criteria, stats) {
+  const blocks = [...reconcilePk(criteria, stats)];
   for (const group of criteria.mops) {
     const meta = CRITERIA.find((entry) => entry.id === group.criterion);
     blocks.push({
@@ -180,7 +179,7 @@ function complianceBody(rows) {
 }
 
 /** @returns {object[]} Section 9: KPP Threshold and Objective compliance. */
-export function buildComplianceSection(criteria) {
+function buildComplianceSection(criteria) {
   if (!criteria) {
     return [{ text: "KPP compliance data was unavailable.", italics: true }];
   }
@@ -188,10 +187,7 @@ export function buildComplianceSection(criteria) {
   const blocks = [
     {
       text:
-        `Compliance is reported for ${system.name || "the system under test"}` +
-        (system.others.length > 0
-          ? `. Runs were also logged for ${system.others.join(", ")}; those systems are not blended into this table.`
-          : ".") +
+        `Compliance is reported for ${system.name || "the system under test"}, from its own runs only.` +
         ` Achieved Objective on ${summary.objective}, met Threshold on ${summary.threshold}, ` +
         `fell short on ${summary.short}. ${summary.not_established} KPPs have no benchmark ` +
         `established and ${summary.not_measured} were not measured on this date. ` +
@@ -294,9 +290,34 @@ export function buildMatrixSection(criteria) {
   ];
 }
 
+/**
+ * Every benchmark actually used, across every system on the day: catalog
+ * KPPs through their compliance records, and scorecard MOP rows, which
+ * carry benchmarks of their own and have no compliance record.
+ *
+ * @returns {{ label: string, basis: string }[]}
+ */
+function benchmarksUsed(criteria) {
+  const packages = criteria?.systems?.length > 0 ? criteria.systems : [criteria || {}];
+  const used = [];
+  for (const pkg of packages) {
+    for (const row of pkg.compliance || []) {
+      used.push({ label: row.label, basis: row.basis });
+    }
+    for (const area of pkg.scorecard?.areas || []) {
+      for (const section of area.sections) {
+        for (const row of section.rows.filter((entry) => entry.kind === "MOP")) {
+          used.push({ label: row.label, basis: row.benchmarkBasis });
+        }
+      }
+    }
+  }
+  return used.filter((entry) => entry.basis && entry.basis.length > 0);
+}
+
 /** @returns {object[]} Section 11: the basis behind every benchmark used. */
 export function buildBasisSection(criteria) {
-  const withBasis = (criteria?.compliance || []).filter((row) => row.basis && row.basis.length > 0);
+  const withBasis = benchmarksUsed(criteria);
   if (withBasis.length === 0) {
     return [
       {
@@ -314,7 +335,7 @@ export function buildBasisSection(criteria) {
       continue;
     }
     seen.add(row.basis);
-    const sharing = withBasis.filter((other) => other.basis === row.basis).map((other) => other.label);
+    const sharing = [...new Set(withBasis.filter((other) => other.basis === row.basis).map((other) => other.label))];
     blocks.push({
       margin: [0, 0, 0, 5],
       fontSize: 8,
@@ -420,7 +441,7 @@ function effectivenessVerdict(scorecard) {
 }
 
 /** @returns {object[]} Section 12: the consolidated C4 scorecard. */
-export function buildScorecardSection(criteria) {
+function buildScorecardSection(criteria) {
   const scorecard = criteria?.scorecard;
   if (!scorecard) {
     return [{ text: "Scorecard data was unavailable.", italics: true }];
@@ -449,7 +470,7 @@ function phaseCell(value) {
 }
 
 /** @returns {object[]} Section 13: the engagement timeline. */
-export function buildTimelineSection(criteria) {
+function buildTimelineSection(criteria) {
   const timeline = criteria?.timeline;
   if (!timeline) {
     return [{ text: "Engagement timeline data was unavailable.", italics: true }];
@@ -484,4 +505,154 @@ export function buildTimelineSection(criteria) {
       margin: [0, 0, 0, 8],
     },
   ];
+}
+
+/** @returns {string} A score out of two, or a dash. */
+function outOfTwo(value) {
+  return value === null || value === undefined ? "--" : value.toFixed(2);
+}
+
+/** @returns {object | null} Section 5's Pk rollup for one system, shaped for reconcilePk. */
+function systemStats(stats, name) {
+  const entry = (stats?.byInterceptor || []).find((row) => row.label === name);
+  return entry ? { overall: entry } : null;
+}
+
+/** @returns {object[]} The note shown when no run named an interceptor. */
+function noSystems() {
+  return [
+    {
+      text: "No runs were logged against an interceptor on this date, so no system can be characterized.",
+      italics: true,
+    },
+  ];
+}
+
+/** @returns {object} One comparison table row. */
+function comparisonRow(pkg, stats) {
+  const { scorecard } = pkg;
+  const pk = systemStats(stats, pkg.system.name)?.overall?.pk;
+  const flagged = scorecard.notMilitarilyEffective;
+  return [
+    { text: pkg.system.name, bold: true },
+    String(pkg.runs),
+    pk === null || pk === undefined ? "--" : pk.toFixed(2),
+    ...scorecard.areas.map((area) => outOfTwo(area.score)),
+    { text: outOfTwo(scorecard.overall), bold: true },
+    `${scorecard.states.scored} / ${scorecard.total}`,
+    {
+      text: flagged ? "Not Militarily Effective" : "No critical failure",
+      bold: flagged,
+      color: flagged ? "#B3261E" : INK,
+    },
+  ];
+}
+
+/** @returns {string} How the day's runs and closeout were split between systems. */
+function attributionNote(criteria) {
+  const primary = criteria.systems.find((pkg) => pkg.countersAttributed);
+  const parts = [
+    `${criteria.systems.length} ${criteria.systems.length === 1 ? "system was" : "systems were"} ` +
+      "flown on this date. Each is characterized from its own runs only; no figure below " +
+      "mixes runs from two systems.",
+  ];
+  if (primary && criteria.systems.length > 1) {
+    parts.push(
+      `Day closeout counters are recorded once per day, not per system, and are attributed to ` +
+        `${primary.system.name} as the system flown on the most intercept runs.`
+    );
+  }
+  if (criteria.unassignedRuns > 0) {
+    parts.push(
+      `${criteria.unassignedRuns} ${criteria.unassignedRuns === 1 ? "run names" : "runs name"} no interceptor ` +
+        "and cannot be attributed to any system, so they appear in the run log and section 5 but in no system's characterization."
+    );
+  }
+  return parts.join(" ");
+}
+
+/** @returns {object[]} Section 8: every system side by side. */
+export function buildSystemComparisonSection(criteria, stats) {
+  const systems = criteria?.systems || [];
+  if (systems.length === 0) {
+    return noSystems();
+  }
+  return [
+    { text: attributionNote(criteria), fontSize: 8, margin: [0, 0, 0, 8] },
+    {
+      table: {
+        headerRows: 1,
+        widths: ["*", 26, 28, 26, 26, 26, 26, 26, 38, 40, 78],
+        body: [
+          headerRow(["System", "Runs", "Pk", "C1", "C2", "C3", "C4", "C5", "Overall", "Scored", "Status"]),
+          ...systems.map((pkg) => comparisonRow(pkg, stats)),
+        ],
+      },
+      layout: tableLayout(),
+      fontSize: 7.5,
+      margin: [0, 0, 0, 6],
+    },
+    {
+      text:
+        "C1 through C5 are the Core Capability Area scores out of 2; Overall is their equal-weight " +
+        "average. Pk is the outcome-based figure from section 5. Each system's full characterization " +
+        "follows in section 9.",
+      fontSize: 7.5,
+      italics: true,
+      color: "#5A6355",
+      margin: [0, 0, 0, 8],
+    },
+  ];
+}
+
+/** @returns {object} A labelled divider inside one system's characterization. */
+function partHeading(text) {
+  return { text, bold: true, fontSize: 9.5, color: "#3E4A2E", margin: [0, 10, 0, 5] };
+}
+
+/** @returns {string} What this system flew, and whether the closeout applies to it. */
+function systemNote(pkg) {
+  const aborts = pkg.runs - pkg.redAirRuns;
+  const flown =
+    `${pkg.redAirRuns} intercept ${pkg.redAirRuns === 1 ? "run" : "runs"} and ${aborts} abort ` +
+    `${aborts === 1 ? "run" : "runs"}` +
+    (pkg.uasGroup ? `, predominantly against Group ${pkg.uasGroup} targets.` : ".");
+  const closeout = pkg.countersAttributed
+    ? " Day closeout counters apply to this system as the day's primary system."
+    : " Day closeout counters were attributed to the day's primary system, so false alarm " +
+      "rate, mean time between system abort, mean time to repair, and the crew and setup " +
+      "measures are not measured for this system on this date.";
+  return flown + closeout;
+}
+
+/** @returns {object[]} One system's complete characterization. */
+function systemBlocks(pkg, index, stats) {
+  return [
+    {
+      text: `9.${index + 1}  ${pkg.system.name}`,
+      bold: true,
+      fontSize: 11,
+      color: INK,
+      margin: [0, index === 0 ? 4 : 0, 0, 4],
+      pageBreak: index === 0 ? undefined : "before",
+    },
+    { text: systemNote(pkg), fontSize: 8, margin: [0, 0, 0, 4] },
+    partHeading("MOP Results"),
+    ...buildMopResults(pkg, systemStats(stats, pkg.system.name)),
+    partHeading("KPP Threshold and Objective Compliance"),
+    ...buildComplianceSection(pkg),
+    partHeading("C4 Scorecard: Core Capability Areas"),
+    ...buildScorecardSection(pkg),
+    partHeading("Engagement Timeline Analysis"),
+    ...buildTimelineSection(pkg),
+  ];
+}
+
+/** @returns {object[]} Section 9: the full characterization of every system. */
+export function buildSystemSections(criteria, stats) {
+  const systems = criteria?.systems || [];
+  if (systems.length === 0) {
+    return noSystems();
+  }
+  return [mopIntro(), ...systems.flatMap((pkg, index) => systemBlocks(pkg, index, stats))];
 }

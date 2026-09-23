@@ -1,9 +1,9 @@
 import express from "express";
 import { requireRole } from "../auth.js";
-import { buildCompliance, primaryGroup, primarySystem, resolveBenchmarks, summarizeCompliance } from "../compliance.js";
-import { CRITERIA, deriveMops, deriveTimeline, KILL_CHAIN, SCENARIOS } from "../criteria.js";
+import { primarySystem } from "../compliance.js";
+import { CRITERIA, KILL_CHAIN, SCENARIOS } from "../criteria.js";
 import { C4_AREAS, C4_SUPPORTING, isNaKey, isScorecardRowId, isVerdictKey } from "../c4.js";
-import { buildScorecard } from "../c4-score.js";
+import { assembleSystem, assembleSystems, countUnassigned } from "../systems.js";
 import { catalogByCategory, isKnownKppId, KPP_CATALOG } from "../kpp-catalog.js";
 import { deriveBenchmarks, GROUP_KINEMATICS } from "../thresholds.js";
 import { asId, asOptionalInteger, asOptionalNumber, asProfile, asText, requiredText } from "../validate.js";
@@ -255,6 +255,21 @@ async function buildReview(pool, config, dayId) {
 }
 
 /**
+ * The criteria package for a day with no runs logged against any system.
+ * The screens still need a scorecard to render, with every row in it
+ * honestly reported as not measured.
+ */
+const NO_SYSTEM = Object.freeze({ interceptorId: null, name: null, rows: [] });
+
+/**
+ * Builds the criteria package for one day, broken out by interceptor.
+ *
+ * `systems` holds one package per interceptor flown, primary system first,
+ * each derived from that system's runs alone. The top-level mops,
+ * compliance, scorecard, and timeline repeat the primary system's package,
+ * so a reader asking "how did the system under test do" gets its answer
+ * without having to know other systems flew.
+ *
  * @param {object} day
  * @param {object[]} rows
  * @param {object[]} benchmarkRows
@@ -262,22 +277,19 @@ async function buildReview(pool, config, dayId) {
  * @returns {object} Criteria package shared by the review screen and the WOR.
  */
 export function assembleReview(day, rows, benchmarkRows, config) {
-  const redAir = rows.filter((row) => row.run_type !== "abort");
-  const system = primarySystem(redAir);
-  const group = primaryGroup(redAir);
-  const profile = redAir.find((row) => row.interceptor_profile)?.interceptor_profile || {};
-  const mops = deriveMops(rows, day, profile);
-  const benchmarks = resolveBenchmarks(benchmarkRows, system.interceptorId, group);
-  const compliance = buildCompliance(mops, day, profile, benchmarks);
+  const systems = assembleSystems(day, rows, benchmarkRows);
+  const lead = systems[0] || assembleSystem(NO_SYSTEM, day, benchmarkRows, true);
   return {
     criteria: CRITERIA,
-    mops,
-    compliance,
-    summary: summarizeCompliance(compliance),
-    scorecard: buildScorecard(mops, compliance, profile, benchmarks),
-    timeline: deriveTimeline(rows),
-    system,
-    uasGroup: group,
+    mops: lead.mops,
+    compliance: lead.compliance,
+    summary: lead.summary,
+    scorecard: lead.scorecard,
+    timeline: lead.timeline,
+    system: primarySystem(rows.filter((row) => row.run_type !== "abort")),
+    uasGroup: lead.uasGroup,
+    systems,
+    unassignedRuns: countUnassigned(rows),
     timezone: config.timezone,
   };
 }
