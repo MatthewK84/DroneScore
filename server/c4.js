@@ -43,6 +43,8 @@ export const SCORE_OBJECTIVE = 2;
  *   reported      a specification or narrative the document does not score
  *   no_benchmark  no Threshold or Objective stored, so nothing to compare
  *   not_measured  a benchmark exists but no value has been produced yet
+ *   claimed       a performance figure the vendor's data sheet states and no
+ *                 run has yet demonstrated; shown, never scored
  */
 export const ROW_STATES = Object.freeze([
   "scored",
@@ -50,6 +52,7 @@ export const ROW_STATES = Object.freeze([
   "reported",
   "no_benchmark",
   "not_measured",
+  "claimed",
 ]);
 
 /** Profile key prefix that marks one scorecard row Not Applicable. */

@@ -1,5 +1,6 @@
-import { KPP_CATALOG } from "./kpp-catalog.js";
+import { isPerformanceClaim, KPP_CATALOG } from "./kpp-catalog.js";
 import { flattenMops } from "./criteria.js";
+import { isVendorDeclared } from "./provenance.js";
 import { evaluateBenchmark, isYesAdverse } from "./thresholds.js";
 
 /**
@@ -32,6 +33,10 @@ const KPP_FROM_MOP = Object.freeze({
   "3b.1": { mopId: "2.1.3", field: "mean", scale: 0.001 },
   "5.1": { mopId: "3.1.3", field: "mean", scale: 0.001 },
   "5.4": { mopId: "3.1.2", field: "value", scale: 100 },
+  // Every system this application evaluates is a kinetic interceptor, so its
+  // demonstrated Pk is its kinetic Pk. Without this a vendor's 5.4e claim
+  // could never be replaced by what the runs showed.
+  "5.4e": { mopId: "3.1.2", field: "value", scale: 100 },
   "8.4": { mopId: "4.2.1", field: "value", scale: 1 },
 });
 
@@ -62,71 +67,105 @@ function asFinite(value) {
 }
 
 /**
- * @param {object} entry Catalog entry.
- * @param {Map<string, object>} mopsById
- * @param {object} day
- * @param {object} profile
- * @returns {{ measured: number | null, source: string }}
+ * @param {object} ctx Evaluation context.
+ * @param {string} id Catalog id.
+ * @returns {string} How a profile value is labelled: the vendor's
+ *   declaration from a data sheet, or the profile's own.
  */
-function measureFor(entry, mopsById, day, profile) {
+function profileSource(ctx, id) {
+  return isVendorDeclared(ctx.sources, id) ? "Vendor-declared" : "System profile";
+}
+
+/**
+ * Finds the strongest evidence for a numeric KPP, in priority order: a MOP
+ * derived from runs, a day closeout counter, a value the derivation engine
+ * computed, then the system profile.
+ *
+ * @param {object} entry Catalog entry.
+ * @param {object} ctx Evaluation context.
+ * @returns {{ measured: number | null, source: string, origin: string | null, derivation: string }}
+ */
+function measureFor(entry, ctx) {
   const fromMop = KPP_FROM_MOP[entry.id];
   if (fromMop) {
-    const measured = measuredFromMop(mopsById.get(fromMop.mopId), fromMop);
+    const measured = measuredFromMop(ctx.mopsById.get(fromMop.mopId), fromMop);
     if (measured !== null) {
-      return { measured, source: `MOP ${fromMop.mopId}` };
+      return { measured, source: `MOP ${fromMop.mopId}`, origin: "mop", derivation: "" };
     }
   }
   const dayColumn = KPP_FROM_DAY[entry.id];
   if (dayColumn) {
-    const measured = asFinite(day?.[dayColumn]);
+    const measured = asFinite(ctx.day?.[dayColumn]);
     if (measured !== null) {
-      return { measured, source: "Day closeout" };
+      return { measured, source: "Day closeout", origin: "day", derivation: "" };
     }
   }
-  const declared = asFinite(profile?.[entry.id]);
-  if (declared !== null) {
-    return { measured: declared, source: "System profile" };
+  const derivation = ctx.derived.get(entry.id);
+  const computed = asFinite(derivation?.value);
+  if (computed !== null) {
+    return { measured: computed, source: "Derived", origin: "derived", derivation: derivation.basis };
   }
-  return { measured: null, source: "" };
+  const declared = asFinite(ctx.profile?.[entry.id]);
+  if (declared !== null) {
+    return { measured: declared, source: profileSource(ctx, entry.id), origin: "profile", derivation: "" };
+  }
+  // Nothing measured. If the engine tried and lacked an input, say which.
+  return { measured: null, source: "", origin: null, derivation: derivation?.basis || "" };
 }
 
 /** @returns {object} Compliance record for a yes/no KPP. */
-function evaluateYesNo(entry, profile) {
-  const answer = profile?.[entry.id];
+function evaluateYesNo(entry, ctx) {
+  const answer = ctx.profile?.[entry.id];
   if (answer !== "yes" && answer !== "no") {
-    return { status: "not_measured", measured: null, source: "", detail: "" };
+    return { status: "not_measured", measured: null, source: "", detail: "", derivation: "" };
   }
   const adverse = isYesAdverse(entry.id);
   const good = adverse ? answer === "no" : answer === "yes";
   return {
     status: good ? "threshold" : "short",
     measured: null,
-    source: "System profile",
+    source: profileSource(ctx, entry.id),
     detail: answer === "yes" ? "Yes" : "No",
+    derivation: "",
   };
 }
 
-/** @returns {object} Compliance record for a narrative KPP. */
-function evaluateNarrative(entry, profile) {
-  const text = profile?.[entry.id];
+/** @returns {object} Compliance record for a narrative KPP, derived text first. */
+function evaluateNarrative(entry, ctx) {
+  const derivation = ctx.derived.get(entry.id);
+  if (typeof derivation?.value === "string" && derivation.value.length > 0) {
+    return { status: "stated", measured: null, source: "Derived", detail: derivation.value, derivation: derivation.basis };
+  }
+  const text = ctx.profile?.[entry.id];
   const stated = typeof text === "string" && text.trim().length > 0;
   return {
     status: stated ? "stated" : "not_measured",
     measured: null,
-    source: stated ? "System profile" : "",
+    source: stated ? profileSource(ctx, entry.id) : "",
     detail: stated ? text.trim() : "",
+    derivation: stated ? "" : derivation?.basis || "",
   };
 }
 
-/** @returns {object} Compliance record for a numeric KPP. */
-function evaluateNumeric(entry, mopsById, day, profile, benchmark) {
-  const { measured, source } = measureFor(entry, mopsById, day, profile);
-  const evaluation = evaluateBenchmark(entry.id, measured, benchmark);
+/**
+ * Compliance record for a numeric KPP. A performance claim whose only
+ * evidence is the vendor's own data sheet is reported as claimed and never
+ * scored: a probability or accuracy is established by testing, not by the
+ * party being tested. The same figure entered by an evaluator scores.
+ *
+ * @returns {object}
+ */
+function evaluateNumeric(entry, ctx, benchmark) {
+  const found = measureFor(entry, ctx);
+  const claimOnly =
+    found.origin === "profile" && isPerformanceClaim(entry.id) && isVendorDeclared(ctx.sources, entry.id);
+  const evaluation = evaluateBenchmark(entry.id, claimOnly ? null : found.measured, benchmark);
   return {
-    status: evaluation.status,
-    measured,
-    source,
+    status: claimOnly ? "claimed" : evaluation.status,
+    measured: found.measured,
+    source: found.source,
     detail: "",
+    derivation: found.derivation,
     threshold: evaluation.threshold,
     objective: evaluation.objective,
     basis: evaluation.basis,
@@ -137,14 +176,14 @@ function evaluateNumeric(entry, mopsById, day, profile, benchmark) {
  * @param {object} entry Catalog entry.
  * @returns {object} The compliance record produced by the matching evaluator.
  */
-function evaluateEntry(entry, mopsById, day, profile, benchmark) {
+function evaluateEntry(entry, ctx, benchmark) {
   if (entry.input === "yesno") {
-    return evaluateYesNo(entry, profile);
+    return evaluateYesNo(entry, ctx);
   }
   if (entry.input === "number") {
-    return evaluateNumeric(entry, mopsById, day, profile, benchmark);
+    return evaluateNumeric(entry, ctx, benchmark);
   }
-  return evaluateNarrative(entry, profile);
+  return evaluateNarrative(entry, ctx);
 }
 
 /**
@@ -154,13 +193,22 @@ function evaluateEntry(entry, mopsById, day, profile, benchmark) {
  * @param {object} day Day row with closeout counters.
  * @param {object} profile System profile answers keyed by KPP id.
  * @param {Map<string, object>} benchmarks Stored benchmarks keyed by KPP id.
+ * @param {{ derived?: Map<string, object>, sources?: object }} [context]
+ *   Values the derivation engine computed, and where each profile value
+ *   came from.
  * @returns {object[]} One record per catalog entry, in catalog order.
  */
-export function buildCompliance(mopGroups, day, profile, benchmarks) {
-  const mopsById = new Map(flattenMops(mopGroups).map((result) => [result.id, result]));
+export function buildCompliance(mopGroups, day, profile, benchmarks, context = {}) {
+  const ctx = {
+    mopsById: new Map(flattenMops(mopGroups).map((result) => [result.id, result])),
+    day,
+    profile,
+    derived: context.derived || new Map(),
+    sources: context.sources || {},
+  };
   return KPP_CATALOG.map((entry) => {
     const benchmark = benchmarks.get(entry.id) || null;
-    const record = evaluateEntry(entry, mopsById, day, profile, benchmark);
+    const record = evaluateEntry(entry, ctx, benchmark);
     return {
       id: entry.id,
       label: entry.label,
@@ -262,7 +310,7 @@ export function primaryGroup(rows) {
 
 /** @returns {object} Counts of each compliance status across the table. */
 export function summarizeCompliance(rows) {
-  const counts = { objective: 0, threshold: 0, short: 0, not_established: 0, not_measured: 0, stated: 0 };
+  const counts = { objective: 0, threshold: 0, short: 0, not_established: 0, not_measured: 0, stated: 0, claimed: 0 };
   for (const row of rows) {
     if (Object.hasOwn(counts, row.status)) {
       counts[row.status] += 1;

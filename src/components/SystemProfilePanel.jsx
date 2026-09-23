@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiError, saveSystemProfile } from "../api.js";
 import { C, MONO, st } from "../styles.js";
 import { Notice } from "./ui.jsx";
+import { VendorSheetCard } from "./VendorSheetCard.jsx";
 
 /**
  * System profile. The catalog entries tagged as system tier are properties
@@ -47,8 +48,11 @@ function countAnswered(profile) {
   return Object.values(profile).filter((value) => String(value).trim().length > 0).length;
 }
 
-/** @param {{ catalog: object, interceptors: object[], isAdmin: boolean }} props */
-export function SystemProfilePanel({ catalog, interceptors, isAdmin }) {
+/**
+ * @param {{ catalog: object, interceptors: object[], isAdmin: boolean,
+ *           onChanged: () => Promise<void> }} props
+ */
+export function SystemProfilePanel({ catalog, interceptors, isAdmin, onChanged }) {
   const [selectedId, setSelectedId] = useState("");
   const [profile, setProfile] = useState({});
   const [status, setStatus] = useState("");
@@ -85,12 +89,14 @@ export function SystemProfilePanel({ catalog, interceptors, isAdmin }) {
     try {
       await saveSystemProfile(selected.id, profile);
       setStatus(`Saved ${countAnswered(profile)} answers for ${selected.name}.`);
+      // Edited values are now the evaluator's; reload so their vendor labels drop.
+      await onChanged();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to save the system profile.");
     } finally {
       setBusy(false);
     }
-  }, [selected, profile, busy]);
+  }, [selected, profile, busy, onChanged]);
 
   if (interceptors.length === 0) {
     return <Notice tone="info">Add an interceptor in the Fleet tab before building a system profile.</Notice>;
@@ -116,6 +122,8 @@ export function SystemProfilePanel({ catalog, interceptors, isAdmin }) {
         </p>
       </div>
 
+      {isAdmin && selected ? <VendorSheetCard interceptor={selected} onApplied={onChanged} /> : null}
+
       {catalog.categories
         .filter((category) => category.entries.some((entry) => entry.tier === "system"))
         .map((category) => (
@@ -123,10 +131,20 @@ export function SystemProfilePanel({ catalog, interceptors, isAdmin }) {
             key={category.section}
             category={category}
             profile={profile}
+            sources={selected?.profileSources || {}}
+            claims={catalog.performanceClaims || []}
             onAnswer={setAnswer}
             disabled={!isAdmin}
           />
         ))}
+
+      <AirframeCard
+        inputs={catalog.airframeInputs || []}
+        profile={profile}
+        sources={selected?.profileSources || {}}
+        onAnswer={setAnswer}
+        disabled={!isAdmin}
+      />
 
       <NarrativeCard profile={profile} onAnswer={setAnswer} disabled={!isAdmin} />
 
@@ -143,8 +161,73 @@ export function SystemProfilePanel({ catalog, interceptors, isAdmin }) {
   );
 }
 
+/**
+ * The airframe figures a vendor data sheet supplies for the derivation
+ * engine. They are not criteria in their own right, but an evaluator can
+ * correct them here like any other answer.
+ */
+function AirframeCard({ inputs, profile, sources, onAnswer, disabled }) {
+  if (inputs.length === 0) {
+    return null;
+  }
+  return (
+    <div style={st.card}>
+      <h2 style={st.secHead}>Interceptor Airframe</h2>
+      <p style={{ ...st.meta, marginBottom: 12 }}>
+        Inputs to the derivation engine: battery life, the intercept envelope check, and the
+        speed and range cross-checks are computed from these.
+      </p>
+      {inputs.map((input) => (
+        <div key={input.key} style={{ marginBottom: 16 }}>
+          <span style={st.label}>
+            {input.measure} ({input.unit})
+            <SourceBadge vendor={sources[input.key]?.source === "vendor-sheet"} claim={false} />
+          </span>
+          <p style={{ ...st.meta, marginTop: 0, marginBottom: 6 }}>{input.description}</p>
+          <input
+            style={st.input}
+            type="number"
+            inputMode="decimal"
+            value={profile[input.key] || ""}
+            disabled={disabled}
+            placeholder={input.unit}
+            onChange={(event) => onAnswer(input.key, event.target.value)}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Marks a value that came from a vendor data sheet. A performance claim so
+ * sourced is shown on the scorecard but not scored, and the badge says so.
+ */
+function SourceBadge({ vendor, claim }) {
+  if (!vendor) {
+    return null;
+  }
+  return (
+    <span
+      style={{
+        marginLeft: 8,
+        fontFamily: MONO,
+        fontSize: 9,
+        letterSpacing: "0.04em",
+        textTransform: "uppercase",
+        color: claim ? C.orange : C.olive,
+        border: `1px solid ${claim ? C.orange : C.olive}`,
+        borderRadius: 4,
+        padding: "1px 5px",
+      }}
+    >
+      {claim ? "Vendor claim, not scored" : "From vendor sheet"}
+    </span>
+  );
+}
+
 /** One catalog section rendered as a card of generated controls. */
-function CategoryCard({ category, profile, onAnswer, disabled }) {
+function CategoryCard({ category, profile, sources, claims, onAnswer, disabled }) {
   const entries = category.entries.filter((entry) => entry.tier === "system");
   return (
     <div style={st.card}>
@@ -155,6 +238,8 @@ function CategoryCard({ category, profile, onAnswer, disabled }) {
         <CatalogControl
           key={entry.id}
           entry={entry}
+          vendor={sources[entry.id]?.source === "vendor-sheet"}
+          claim={claims.includes(entry.id)}
           value={profile[entry.id] || ""}
           onChange={(value) => onAnswer(entry.id, value)}
           disabled={disabled}
@@ -165,11 +250,12 @@ function CategoryCard({ category, profile, onAnswer, disabled }) {
 }
 
 /** @returns {JSX.Element} The control matching a catalog entry's input type. */
-function CatalogControl({ entry, value, onChange, disabled }) {
+function CatalogControl({ entry, vendor, claim, value, onChange, disabled }) {
   return (
     <div style={{ marginBottom: 16 }}>
       <span style={st.label}>
         {entry.label} {entry.measure} ({entry.units})
+        <SourceBadge vendor={vendor} claim={claim} />
       </span>
       <p style={{ ...st.meta, marginTop: 0, marginBottom: 6 }}>{entry.description}</p>
       {entry.input === "yesno" ? (

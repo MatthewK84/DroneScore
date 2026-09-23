@@ -206,7 +206,7 @@ async function closeDayAtomic(pool, config, dayId) {
     const day = dayResult.rows[0];
     const engagementResult = await client.query(
       `SELECT e.*, d.name AS drone_name, d.uas_group, i.name AS interceptor_name,
-              i.profile AS interceptor_profile
+              i.profile AS interceptor_profile, i.profile_sources AS interceptor_profile_sources
        FROM engagements e
        LEFT JOIN drones d ON d.id = e.drone_id
        LEFT JOIN interceptors i ON i.id = e.interceptor_id

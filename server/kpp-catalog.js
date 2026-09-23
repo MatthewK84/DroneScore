@@ -252,6 +252,30 @@ export function catalogForTier(tier) {
   return KPP_CATALOG.filter((entry) => entry.tier === tier);
 }
 
+/**
+ * Performance claims: probabilities and accuracies that only testing can
+ * establish. A vendor may state them, and the evaluation shows the claim
+ * beside what the runs demonstrated, but a claim taken from a vendor data
+ * sheet never scores. The same figure entered by an evaluator, who is
+ * attesting to it, scores as any profile value does.
+ */
+export const PERFORMANCE_CLAIM_IDS = Object.freeze([
+  "1.2",
+  "2.2",
+  "3a.2",
+  "4.2",
+  "5.4",
+  "5.4e",
+  "INT-5",
+  "INT-6",
+  "INT-13",
+]);
+
+/** @returns {boolean} True when the entry is a performance claim. */
+export function isPerformanceClaim(id) {
+  return PERFORMANCE_CLAIM_IDS.includes(id);
+}
+
 /** @returns {boolean} True when the id names a real catalog entry. */
 export function isKnownKppId(id) {
   return typeof id === "string" && KPP_BY_ID.has(id);

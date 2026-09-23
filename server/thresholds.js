@@ -166,6 +166,44 @@ function altitudeBenchmark(kppId, band) {
   };
 }
 
+/**
+ * @param {object} band UAS group band.
+ * @returns {number | null} The band's speed ceiling in metres per second,
+ *   or null when the band publishes none.
+ */
+export function ceilingSpeedMs(band) {
+  return band.maxSpeedKt === null ? null : band.maxSpeedKt * METRES_PER_KT_SECOND;
+}
+
+/**
+ * Interceptor speed benchmark. A tail chase only closes if the interceptor
+ * is faster than its target, so the band's speed ceiling is the Threshold.
+ * How much faster is enough depends on engagement geometry that no public
+ * source tabulates, so the Objective is left for the evaluator rather than
+ * filled with an invented margin.
+ *
+ * @param {object} band
+ * @returns {object}
+ */
+function speedBenchmark(band) {
+  const ceiling = ceilingSpeedMs(band);
+  if (ceiling === null) {
+    return notDerivable("INT-1", "m/s", `Group ${band.group} has no published speed ceiling, so no speed benchmark follows.`);
+  }
+  const threshold = Math.round(ceiling * 10) / 10;
+  return {
+    kppId: "INT-1",
+    threshold,
+    objective: null,
+    unit: "m/s",
+    derived: true,
+    basis:
+      `Interceptor speed: a tail chase closes only against a slower target. Threshold is the ` +
+      `Group ${band.group} ceiling of ${band.maxSpeedKt} kt (${threshold} m/s). No public source ` +
+      `sets how much faster is enough, so the Objective is left for the evaluator. ${GROUP_SOURCE}`,
+  };
+}
+
 const EFFECTIVENESS_KPPS = Object.freeze(["1.2", "3a.2", "4.2", "5.4", "5.4a", "5.4b", "5.4c", "5.4d", "5.4e"]);
 const QUANTITY_KPPS = Object.freeze(["1.6", "2.3", "4.3", "5.2", "5.2a", "5.2b", "5.2c", "5.2d", "5.2e", "5.3"]);
 
@@ -208,6 +246,7 @@ export function deriveBenchmarks(params) {
     rangeBenchmark("3b.1", band, params.standoffM, terminal, "Identification range, before weapon release"),
     rangeBenchmark("4.1", band, params.standoffM, terminal, "Weapons-quality track range"),
     rangeBenchmark("5.1", band, params.standoffM, 0, "Defeat range at the protected standoff"),
+    speedBenchmark(band),
   ];
   const withheld = [
     ...EFFECTIVENESS_KPPS.map((id) => notDerivable(id, "%", NO_PUBLIC_EFFECTIVENESS)),

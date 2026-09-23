@@ -11,6 +11,7 @@ import { createOperationsRouter } from "./routes/operations.js";
 import { createPublicRouter } from "./routes/public.js";
 import { createReadonlyRouter } from "./routes/readonly.js";
 import { createSupportRouter } from "./routes/support.js";
+import { createVendorRouter, SHEET_BODY_LIMIT } from "./routes/vendor.js";
 
 /**
  * DRONESMOKE server. One Express process serves the JSON API and the
@@ -50,6 +51,10 @@ function buildApp(pool, mailer) {
   const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
 
   app.set("trust proxy", 1);
+  // A completed vendor data sheet arrives base64-encoded and can exceed the
+  // app-wide body limit. Its parser runs first; the general one then sees
+  // an already-parsed body and passes it through.
+  app.use("/api/interceptors/:id/vendor-sheet", express.json({ limit: SHEET_BODY_LIMIT }));
   app.use(express.json({ limit: "1mb" }));
   app.use(cookieSupport);
   app.use(sessionMiddleware(config));
@@ -61,6 +66,7 @@ function buildApp(pool, mailer) {
   app.use("/api", createCriteriaRouter(pool, config));
   app.use("/api", createOperationsRouter(pool, config, mailer));
   app.use("/api", createSupportRouter(pool));
+  app.use("/api", createVendorRouter(pool));
   app.use("/api", (_req, res) => {
     res.status(404).json({ success: false, error: "Not found." });
   });

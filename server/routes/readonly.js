@@ -106,7 +106,8 @@ export function createReadonlyRouter(pool, config) {
     try {
       const engagements = await pool.query(
         `SELECT e.*, to_char(dy.day_date, 'YYYY-MM-DD') AS day_date, d.uas_group,
-                i.name AS interceptor_name, i.profile AS interceptor_profile
+                i.name AS interceptor_name, i.profile AS interceptor_profile,
+                i.profile_sources AS interceptor_profile_sources
          FROM engagements e
          JOIN days dy ON dy.id = e.day_id
          LEFT JOIN drones d ON d.id = e.drone_id

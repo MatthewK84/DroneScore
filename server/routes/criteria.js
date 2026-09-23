@@ -3,8 +3,10 @@ import { requireRole } from "../auth.js";
 import { primarySystem } from "../compliance.js";
 import { CRITERIA, KILL_CHAIN, SCENARIOS } from "../criteria.js";
 import { C4_AREAS, C4_SUPPORTING, isNaKey, isScorecardRowId, isVerdictKey } from "../c4.js";
+import { retainSources } from "../provenance.js";
 import { assembleSystem, assembleSystems, countUnassigned } from "../systems.js";
-import { catalogByCategory, isKnownKppId, KPP_CATALOG } from "../kpp-catalog.js";
+import { AIRFRAME_INPUTS, isAirframeInputKey } from "../vendor-template.js";
+import { catalogByCategory, isKnownKppId, KPP_CATALOG, PERFORMANCE_CLAIM_IDS } from "../kpp-catalog.js";
 import { deriveBenchmarks, GROUP_KINEMATICS } from "../thresholds.js";
 import { asId, asOptionalInteger, asOptionalNumber, asProfile, asText, requiredText } from "../validate.js";
 
@@ -39,7 +41,13 @@ const NARRATIVE_MOP_KEYS = Object.freeze([
  *   Not Applicable to this interceptor configuration.
  */
 function isProfileKey(key) {
-  return isKnownKppId(key) || NARRATIVE_MOP_KEYS.includes(key) || isVerdictKey(key) || isNaKey(key);
+  return (
+    isKnownKppId(key) ||
+    NARRATIVE_MOP_KEYS.includes(key) ||
+    isVerdictKey(key) ||
+    isNaKey(key) ||
+    isAirframeInputKey(key)
+  );
 }
 
 /**
@@ -243,7 +251,8 @@ async function buildReview(pool, config, dayId) {
   }
   const day = dayResult.rows[0];
   const engagements = await pool.query(
-    `SELECT e.*, d.name AS drone_name, d.uas_group, i.name AS interceptor_name, i.profile AS interceptor_profile
+    `SELECT e.*, d.name AS drone_name, d.uas_group, i.name AS interceptor_name, i.profile AS interceptor_profile,
+            i.profile_sources AS interceptor_profile_sources
      FROM engagements e
      LEFT JOIN drones d ON d.id = e.drone_id
      LEFT JOIN interceptors i ON i.id = e.interceptor_id
@@ -252,6 +261,41 @@ async function buildReview(pool, config, dayId) {
   );
   const benchmarkRows = await pool.query("SELECT * FROM benchmarks");
   return assembleReview(day, engagements.rows, benchmarkRows.rows, config);
+}
+
+/**
+ * Saves an evaluator's edit to a system profile. Any value the edit changed
+ * or cleared loses its vendor provenance, because it is now the
+ * evaluator's; the read and both writes share one transaction so a
+ * concurrent import cannot slip between them.
+ *
+ * @returns {Promise<object | null>} Provenance after the save, or null when
+ *   the interceptor does not exist.
+ */
+async function saveProfile(pool, id, profile) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const current = await client.query("SELECT profile, profile_sources FROM interceptors WHERE id=$1 FOR UPDATE", [id]);
+    if (current.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return null;
+    }
+    const { profile: before, profile_sources: sources } = current.rows[0];
+    const kept = retainSources(before || {}, profile, sources || {});
+    await client.query("UPDATE interceptors SET profile=$1, profile_sources=$2 WHERE id=$3", [
+      JSON.stringify(profile),
+      JSON.stringify(kept),
+      id,
+    ]);
+    await client.query("COMMIT");
+    return kept;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 /**
@@ -310,6 +354,8 @@ export function createCriteriaRouter(pool, config) {
       areas: C4_AREAS,
       supporting: C4_SUPPORTING,
       scenarios: SCENARIOS,
+      airframeInputs: AIRFRAME_INPUTS,
+      performanceClaims: PERFORMANCE_CLAIM_IDS,
     });
   });
 
@@ -379,14 +425,11 @@ export function createCriteriaRouter(pool, config) {
     }
     try {
       const profile = asProfile(req.body?.profile, isProfileKey);
-      const result = await pool.query("UPDATE interceptors SET profile=$1 WHERE id=$2", [
-        JSON.stringify(profile),
-        id,
-      ]);
-      if (result.rowCount === 0) {
+      const saved = await saveProfile(pool, id, profile);
+      if (saved === null) {
         return res.status(404).json({ success: false, error: "Interceptor not found." });
       }
-      return res.json({ success: true, profile });
+      return res.json({ success: true, profile, profileSources: saved });
     } catch (error) {
       console.error("Save profile failed:", error?.message);
       return res.status(500).json({ success: false, error: "Failed to save the system profile." });

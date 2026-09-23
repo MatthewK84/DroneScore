@@ -23,6 +23,7 @@ import { computeDayStats } from "./analytics.js";
 import { buildScorecard } from "./c4-score.js";
 import { buildCompliance, primaryGroup, primarySystem, resolveBenchmarks, summarizeCompliance } from "./compliance.js";
 import { deriveMops, deriveTimeline } from "./criteria.js";
+import { crossCheck, deriveFromDeclarations } from "./derivations.js";
 
 /**
  * Closeout counters that accumulate across days. A rate built from them
@@ -117,11 +118,13 @@ export function partitionBySystem(rows) {
  */
 export function assembleSystem(group, day, benchmarkRows) {
   const profile = group.rows.find((row) => row.interceptor_profile)?.interceptor_profile || {};
+  const sources = group.rows.find((row) => row.interceptor_profile_sources)?.interceptor_profile_sources || {};
   const redAir = group.rows.filter(isRedAir);
   const uasGroup = primaryGroup(redAir);
   const mops = deriveMops(group.rows, day, profile);
   const benchmarks = resolveBenchmarks(benchmarkRows, group.interceptorId, uasGroup);
-  const compliance = buildCompliance(mops, day, profile, benchmarks);
+  const engine = deriveFromDeclarations(profile, group.rows, mops);
+  const compliance = buildCompliance(mops, day, profile, benchmarks, { derived: engine.values, sources });
   return {
     system: { interceptorId: group.interceptorId, name: group.name, others: [] },
     uasGroup,
@@ -132,6 +135,9 @@ export function assembleSystem(group, day, benchmarkRows) {
     summary: summarizeCompliance(compliance),
     scorecard: buildScorecard(mops, compliance, profile, benchmarks),
     timeline: deriveTimeline(group.rows),
+    derivations: [...engine.values.entries()].map(([id, entry]) => ({ id, ...entry })),
+    speedAdvantage: engine.speed,
+    crossChecks: crossCheck(profile, sources, group.rows, mops),
   };
 }
 
