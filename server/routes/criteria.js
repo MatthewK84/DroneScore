@@ -278,7 +278,7 @@ const NO_SYSTEM = Object.freeze({ interceptorId: null, name: null, rows: [] });
  */
 export function assembleReview(day, rows, benchmarkRows, config) {
   const systems = assembleSystems(day, rows, benchmarkRows);
-  const lead = systems[0] || assembleSystem(NO_SYSTEM, day, benchmarkRows, true);
+  const lead = systems[0] || assembleSystem(NO_SYSTEM, day, benchmarkRows);
   return {
     criteria: CRITERIA,
     mops: lead.mops,

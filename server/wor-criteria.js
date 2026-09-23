@@ -548,18 +548,17 @@ function comparisonRow(pkg, stats) {
   ];
 }
 
-/** @returns {string} How the day's runs and closeout were split between systems. */
+/** @returns {string} How the day's runs and closeout apply to each system. */
 function attributionNote(criteria) {
-  const primary = criteria.systems.find((pkg) => pkg.countersAttributed);
   const parts = [
     `${criteria.systems.length} ${criteria.systems.length === 1 ? "system was" : "systems were"} ` +
       "flown on this date. Each is characterized from its own runs only; no figure below " +
       "mixes runs from two systems.",
   ];
-  if (primary && criteria.systems.length > 1) {
+  if (criteria.systems.length > 1) {
     parts.push(
-      `Day closeout counters are recorded once per day, not per system, and are attributed to ` +
-        `${primary.system.name} as the system flown on the most intercept runs.`
+      "Every system shares the day's range space, so the day closeout counters (false alarms, " +
+        "operating time, system aborts, repair time, crew, and setup time) apply to each of them."
     );
   }
   if (criteria.unassignedRuns > 0) {
@@ -610,19 +609,14 @@ function partHeading(text) {
   return { text, bold: true, fontSize: 9.5, color: "#3E4A2E", margin: [0, 10, 0, 5] };
 }
 
-/** @returns {string} What this system flew, and whether the closeout applies to it. */
+/** @returns {string} What this system flew. */
 function systemNote(pkg) {
   const aborts = pkg.runs - pkg.redAirRuns;
-  const flown =
+  return (
     `${pkg.redAirRuns} intercept ${pkg.redAirRuns === 1 ? "run" : "runs"} and ${aborts} abort ` +
     `${aborts === 1 ? "run" : "runs"}` +
-    (pkg.uasGroup ? `, predominantly against Group ${pkg.uasGroup} targets.` : ".");
-  const closeout = pkg.countersAttributed
-    ? " Day closeout counters apply to this system as the day's primary system."
-    : " Day closeout counters were attributed to the day's primary system, so false alarm " +
-      "rate, mean time between system abort, mean time to repair, and the crew and setup " +
-      "measures are not measured for this system on this date.";
-  return flown + closeout;
+    (pkg.uasGroup ? `, predominantly against Group ${pkg.uasGroup} targets.` : ".")
+  );
 }
 
 /** @returns {object[]} One system's complete characterization. */

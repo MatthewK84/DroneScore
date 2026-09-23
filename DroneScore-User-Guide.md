@@ -285,11 +285,11 @@ system (the one flown on the most intercept runs) is listed first and opens
 by default.
 
 Day closeout counters — false alarms, operating minutes, system aborts, repair
-time, crew, setup time — are entered once per day, not per system, so they are
-attributed to the primary system only. For any other system the rows they feed
-(MOP 1.1.4, 4.2.1, 4.2.2 and the workload and setup KPPs) read *No data*, and
-the scorecard says why. Runs logged with no interceptor selected belong to no
-system and are counted but excluded.
+time, crew, setup time — are entered once per day. Every system documented on
+a day shares that day's range space, so the closeout applies to each of them in
+full: a false alarm rate of 1 per hour on the day is 1 per hour for every system
+flown. Runs logged with no interceptor selected belong to no system and are
+counted but excluded.
 
 **Nothing on this screen asks you for a number.** The Measured column fills
 itself from the runs already logged on the Score tab. Logging an engagement

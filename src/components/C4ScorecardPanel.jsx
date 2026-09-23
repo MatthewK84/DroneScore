@@ -187,8 +187,8 @@ function SystemPicker({ systems, selectedId, onSelect, unassigned }) {
         })}
       </div>
       <p style={{ ...st.meta, marginTop: 10 }}>
-        Each system is scored from its own runs only. Day closeout counters are recorded once per
-        day and apply to the primary system, listed first.
+        Each system is scored from its own runs only; the primary system is listed first. Every
+        system shares the day&apos;s range space, so the day closeout applies to each of them.
         {unassigned > 0
           ? ` ${unassigned} ${unassigned === 1 ? "run names" : "runs name"} no interceptor and ${unassigned === 1 ? "is" : "are"} not counted toward any system.`
           : ""}
@@ -241,9 +241,6 @@ function ScoreHeader({ pkg }) {
       <p style={{ ...st.meta, marginTop: 6 }}>
         System under test: {system.name || "none logged"}
         {group ? ` against Group ${group}` : ""}, scored from its own runs only.
-        {pkg.countersAttributed === false
-          ? " Day closeout counters belong to the day's primary system, so the rows they feed are not measured here."
-          : ""}
       </p>
     </div>
   );

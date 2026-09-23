@@ -7,14 +7,13 @@
  * is derived from exactly one system's runs and nobody else's. Deriving a
  * MOP from a mix of systems produces a number that describes no system.
  *
- * Two things cannot be partitioned by run, and this module says so rather
- * than guessing:
+ * Two things are not partitioned by run:
  *
  *   Day closeout counters (false alarms, operating minutes, system aborts,
- *   repair minutes, crew, setup time) are entered once per day, not per
- *   system. They are attributed to the day's primary system, the one flown
- *   on the most intercept runs, which is who the closeout was describing.
- *   Every other system on that day is scored without them.
+ *   repair minutes, crew, setup time) are entered once per day. Every
+ *   system documented on a day shares that day's range space, so the
+ *   closeout describes the conditions all of them operated in and applies
+ *   to each of them in full.
  *
  *   Runs logged with no interceptor cannot belong to any system. They are
  *   counted and reported, and excluded from every per-system figure.
@@ -35,8 +34,6 @@ const FLOW_COUNTERS = Object.freeze(["false_alarms", "operating_minutes", "syste
 /** Closeout counters that describe a level, where the latest value stands. */
 const LEVEL_COUNTERS = Object.freeze(["operate_crew", "setup_crew", "setup_minutes"]);
 
-const ALL_COUNTERS = Object.freeze([...FLOW_COUNTERS, ...LEVEL_COUNTERS]);
-
 /** @returns {boolean} True for a run that tests the kill chain. */
 function isRedAir(row) {
   return row.run_type !== "abort";
@@ -51,18 +48,6 @@ function hasSystem(row) {
 function finite(value) {
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-/**
- * @param {object} day Day row.
- * @returns {object} The same day with every closeout counter cleared.
- */
-export function withoutCounters(day) {
-  const cleared = { ...(day || {}) };
-  for (const key of ALL_COUNTERS) {
-    cleared[key] = null;
-  }
-  return cleared;
 }
 
 /** @returns {boolean} True when the day recorded every flow counter. */
@@ -126,12 +111,11 @@ export function partitionBySystem(rows) {
  * Builds the full criteria package for one system.
  *
  * @param {{ interceptorId: number | null, name: string | null, rows: object[] }} group
- * @param {object} day Day row, already cleared of counters if not attributed.
+ * @param {object} day Day row, or combined closeout counters across days.
  * @param {object[]} benchmarkRows Every stored benchmark.
- * @param {boolean} countersAttributed Whether the day closeout applies here.
  * @returns {object} MOPs, compliance, scorecard, and timeline for the system.
  */
-export function assembleSystem(group, day, benchmarkRows, countersAttributed) {
+export function assembleSystem(group, day, benchmarkRows) {
   const profile = group.rows.find((row) => row.interceptor_profile)?.interceptor_profile || {};
   const redAir = group.rows.filter(isRedAir);
   const uasGroup = primaryGroup(redAir);
@@ -143,7 +127,6 @@ export function assembleSystem(group, day, benchmarkRows, countersAttributed) {
     uasGroup,
     runs: group.rows.length,
     redAirRuns: redAir.length,
-    countersAttributed,
     mops,
     compliance,
     summary: summarizeCompliance(compliance),
@@ -153,8 +136,8 @@ export function assembleSystem(group, day, benchmarkRows, countersAttributed) {
 }
 
 /**
- * Builds one criteria package per interceptor flown on a day. Day closeout
- * counters go to the primary system and no other.
+ * Builds one criteria package per interceptor flown on a day. Every system
+ * shares the day's range space, so each is scored with the full closeout.
  *
  * @param {object} day Day row with closeout counters.
  * @param {object[]} rows Every engagement of the day.
@@ -162,12 +145,7 @@ export function assembleSystem(group, day, benchmarkRows, countersAttributed) {
  * @returns {object[]} Packages, primary system first.
  */
 export function assembleSystems(day, rows, benchmarkRows) {
-  const groups = partitionBySystem(rows);
-  const primaryId = primarySystem(rows.filter(isRedAir)).interceptorId;
-  return groups.map((group) => {
-    const attributed = group.interceptorId === primaryId;
-    return assembleSystem(group, attributed ? day : withoutCounters(day), benchmarkRows, attributed);
-  });
+  return partitionBySystem(rows).map((group) => assembleSystem(group, day, benchmarkRows));
 }
 
 /** @returns {number} Runs that name no interceptor and so belong to no system. */
@@ -223,13 +201,13 @@ function publicProgress(scorecard) {
 
 /**
  * Scores one system on every run it has flown up to a date, with the
- * closeout of each day it was primary on.
+ * closeout of every day it flew.
  *
  * @returns {object} The scorecard as of that date.
  */
-function cumulativeScorecard(group, attributedDays, benchmarkRows) {
-  const { counters } = combineDayCounters(attributedDays);
-  return assembleSystem(group, counters, benchmarkRows, attributedDays.length > 0).scorecard;
+function cumulativeScorecard(group, flownDays, benchmarkRows) {
+  const { counters } = combineDayCounters(flownDays);
+  return assembleSystem(group, counters, benchmarkRows).scorecard;
 }
 
 /** @returns {string} A day's date as YYYY-MM-DD. */
@@ -238,43 +216,24 @@ function dateOf(row) {
 }
 
 /**
- * The primary system of every day, keyed by day id. Days are attributed
- * one at a time because the primary system is a fact about a day.
- *
- * @param {object[]} engagements Every engagement, each carrying day_id.
- * @returns {Map<string, number | null>}
- */
-function primaryByDay(engagements) {
-  const byDay = new Map();
-  for (const row of engagements) {
-    const key = String(row.day_id);
-    const bucket = byDay.get(key) || [];
-    bucket.push(row);
-    byDay.set(key, bucket);
-  }
-  return new Map(
-    [...byDay.entries()].map(([dayId, rows]) => [dayId, primarySystem(rows.filter(isRedAir)).interceptorId])
-  );
-}
-
-/**
  * Progress of one system toward the criteria, now and after each day it
  * flew, so a reader can see the evaluation fill in over time.
  *
  * @returns {object} Aggregate progress for one system.
  */
-function progressFor(group, days, primaries, benchmarkRows, timezone) {
+function progressFor(group, days, benchmarkRows, timezone) {
+  const flownDayIds = new Set(group.rows.map((row) => String(row.day_id)));
+  const flownDays = days.filter((day) => flownDayIds.has(String(day.id)));
   const flownDates = [...new Set(group.rows.map(dateOf))].sort();
-  const attributed = days.filter((day) => primaries.get(String(day.id)) === group.interceptorId);
   const history = flownDates.map((date) => {
     const upTo = { ...group, rows: group.rows.filter((row) => dateOf(row) <= date) };
-    const daysUpTo = attributed.filter((day) => dateOf(day) <= date);
+    const daysUpTo = flownDays.filter((day) => dateOf(day) <= date);
     const scorecard = cumulativeScorecard(upTo, daysUpTo, benchmarkRows);
     return { date, overall: scorecard.overall, scored: scorecard.states.scored };
   });
-  const scorecard = cumulativeScorecard(group, attributed, benchmarkRows);
+  const scorecard = cumulativeScorecard(group, flownDays, benchmarkRows);
   const stats = computeDayStats(group.rows, timezone);
-  const closeout = combineDayCounters(attributed);
+  const closeout = combineDayCounters(flownDays);
   return {
     name: group.name,
     daysFlown: flownDates.length,
@@ -299,9 +258,8 @@ function progressFor(group, days, primaries, benchmarkRows, timezone) {
  * @returns {{ systems: object[], unassignedRuns: number }}
  */
 export function buildProgress(engagements, days, benchmarkRows, timezone) {
-  const primaries = primaryByDay(engagements);
   const systems = partitionBySystem(engagements).map((group) =>
-    progressFor(group, days, primaries, benchmarkRows, timezone)
+    progressFor(group, days, benchmarkRows, timezone)
   );
   return { systems, unassignedRuns: countUnassigned(engagements) };
 }

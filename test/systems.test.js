@@ -7,7 +7,6 @@ import {
   combineDayCounters,
   countUnassigned,
   partitionBySystem,
-  withoutCounters,
 } from "../server/systems.js";
 import { assembleReview } from "../server/routes/criteria.js";
 
@@ -104,13 +103,13 @@ test("each system is scored against its own profile, not the first one found", (
   assert.equal(speed(ki2).score, 0);
 });
 
-test("day closeout counters go to the primary system only", () => {
+test("the day closeout applies to every system sharing the range that day", () => {
   const rows = [run({}), run({}), otherRun({})];
   const [ki1, ki2] = assembleSystems(DAY, rows, []);
-  assert.equal(ki1.countersAttributed, true);
   assert.equal(mopOf(ki1, "1.1.4").value, 1, "two alarms over two hours");
-  assert.equal(ki2.countersAttributed, false);
-  assert.equal(mopOf(ki2, "1.1.4").value, null, "KI-2 does not inherit KI-1's closeout");
+  assert.equal(mopOf(ki2, "1.1.4").value, 1, "KI-2 flew the same range space, so the same closeout");
+  assert.equal(mopOf(ki2, "4.2.1").value, 120, "120 operating minutes over one abort");
+  assert.equal(mopOf(ki2, "4.2.1").value, mopOf(ki1, "4.2.1").value);
 });
 
 test("runs with no interceptor are counted and kept out of every system", () => {
@@ -128,13 +127,6 @@ test("a day with no runs still yields a scorecard to render", () => {
   assert.deepEqual(review.systems, []);
   assert.equal(review.scorecard.total, 67);
   assert.equal(review.scorecard.overall, null);
-});
-
-test("clearing counters leaves the rest of the day intact", () => {
-  const cleared = withoutCounters(DAY);
-  assert.equal(cleared.false_alarms, null);
-  assert.equal(cleared.setup_minutes, null);
-  assert.equal(cleared.day_date, "2026-09-11");
 });
 
 test("combined closeouts sum flows over complete days and keep the latest level", () => {
@@ -171,12 +163,12 @@ test("progress accumulates each system across days and records its history", () 
   assert.equal(ki1.daysFlown, 2);
   assert.equal(ki1.redAirRuns, 4);
   assert.equal(ki1.pk, 0.75, "three defeats in four engagements across both days");
-  assert.equal(ki1.closeoutDays, 2, "KI-1 was primary on both days");
+  assert.equal(ki1.closeoutDays, 2, "KI-1 flew both days");
   assert.deepEqual(ki1.history.map((point) => point.date), ["2026-09-10", "2026-09-11"]);
   assert.equal(ki1.history[0].overall, 0, "Pk 0.50 after day one is below the 60 percent threshold");
   assert.equal(ki1.history[1].overall, 1, "Pk 0.75 by day two meets threshold");
   assert.equal(ki1.notMilitarilyEffective, false);
-  assert.equal(ki2.closeoutDays, 0, "KI-2 was never the primary system");
+  assert.equal(ki2.closeoutDays, 1, "KI-2 flew one day and takes that day's closeout");
   assert.equal(ki2.notMilitarilyEffective, true, "KI-2's only engagement missed a Critical KPP");
   assert.deepEqual(ki2.criticalFailures, [{ label: "MOP 3.1.2", measure: "Probability of Kill / Defeat (Pk)" }]);
 });
@@ -212,4 +204,20 @@ test("the public progress payload carries scores and counts, never evidence", ()
   for (const text of forbidden) {
     assert.equal(payload.includes(text), false, `public progress leaked ${text}`);
   }
+});
+
+test("progress takes the closeout of only the days a system actually flew", () => {
+  const engagements = [
+    run({ day_id: 1, day_date: "2026-09-10" }),
+    run({ day_id: 2, day_date: "2026-09-11" }),
+    otherRun({ day_id: 2, day_date: "2026-09-11" }),
+  ];
+  const days = [
+    { ...DAY, id: 1, day_date: "2026-09-10", false_alarms: 10, operating_minutes: 60 },
+    { ...DAY, id: 2, day_date: "2026-09-11", false_alarms: 2, operating_minutes: 120 },
+  ];
+  const { systems } = buildProgress(engagements, days, [], "UTC");
+  const [ki1, ki2] = systems;
+  assert.equal(ki1.closeoutDays, 2);
+  assert.equal(ki2.closeoutDays, 1, "KI-2 did not fly on the 10th, so that day's alarms are not its own");
 });

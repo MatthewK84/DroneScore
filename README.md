@@ -300,10 +300,9 @@ The database schema is created at boot; there is no separate migration step.
   benchmarked would let an evaluation raise its score by measuring less.
 - Criteria are scored per interceptor, from that interceptor's runs only. A day
   that flew two systems is two evaluations, and the report gives each its own
-  pages. Day closeout counters are entered once per day, so they are attributed
-  to the day's primary system (the one flown on the most intercept runs) and
-  not to the others. Runs logged with no interceptor are counted and excluded
-  from every system.
+  pages. Every system documented on a day shares that day's range space, so the
+  day closeout counters apply to each of them in full. Runs logged with no
+  interceptor are counted and excluded from every system.
 - The criteria flag a system "Not Militarily Effective" when a Critical KPP
   scores 0, but do not say which KPPs are critical. That is declared by the
   evaluator on the benchmark record, beside the Threshold and Objective, and is
