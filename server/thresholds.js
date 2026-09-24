@@ -53,9 +53,13 @@ const FEET_PER_METRE = 3.28084;
 /**
  * KPPs where a smaller measured value is the better result. Cost, weight,
  * crew size, error, and elapsed time all improve as they fall; the NASA-TLX
- * subscales run the same way, where 100 is the heaviest workload.
+ * subscales run the same way, where 100 is the heaviest workload. A lower
+ * minimum detection altitude (1.4) and a finer resolution (1.8) are also
+ * better results.
  */
 const LOWER_IS_BETTER = Object.freeze([
+  "1.4",
+  "1.8",
   "2.2",
   "5.8",
   "6.1",

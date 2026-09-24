@@ -59,7 +59,7 @@ function isBenchmarkableId(id) {
 }
 
 /** Maps a benchmark row to the API shape. */
-function benchmarkToApi(row) {
+export function benchmarkToApi(row) {
   return {
     id: Number(row.id),
     interceptorId: row.interceptor_id === null ? null : Number(row.interceptor_id),
@@ -74,7 +74,7 @@ function benchmarkToApi(row) {
 }
 
 /** @returns {object | null} Validated benchmark payload, or null. */
-function parseBenchmark(body) {
+export function parseBenchmark(body) {
   const kppId = asText(body?.kppId, 20);
   if (!isBenchmarkableId(kppId)) {
     return null;

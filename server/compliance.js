@@ -113,8 +113,34 @@ function measureFor(entry, ctx) {
   return { measured: null, source: "", origin: null, derivation: derivation?.basis || "" };
 }
 
+/** @returns {boolean} True when a benchmark stores at least one level. */
+function hasLevels(benchmark) {
+  return Boolean(benchmark) && (benchmark.threshold !== null || benchmark.objective !== null);
+}
+
+/**
+ * Verdict for a Y/N answer. With no stored benchmark, a favorable answer
+ * meets the Threshold. A stored Y/N benchmark encodes 1 as "favorable
+ * answer required" and 0 as "not required" at each level. A favorable
+ * answer then meets the Objective. An unfavorable one still meets the
+ * Threshold when the Threshold does not require the favorable answer.
+ *
+ * @param {boolean} good True when the answer is the favorable one.
+ * @param {object | null} benchmark Stored benchmark, or null.
+ * @returns {string} "objective", "threshold", or "short".
+ */
+export function yesNoVerdict(good, benchmark) {
+  if (!hasLevels(benchmark)) {
+    return good ? "threshold" : "short";
+  }
+  if (good) {
+    return "objective";
+  }
+  return benchmark.threshold === 0 ? "threshold" : "short";
+}
+
 /** @returns {object} Compliance record for a yes/no KPP. */
-function evaluateYesNo(entry, ctx) {
+function evaluateYesNo(entry, ctx, benchmark) {
   const answer = ctx.profile?.[entry.id];
   if (answer !== "yes" && answer !== "no") {
     return { status: "not_measured", measured: null, source: "", detail: "", derivation: "" };
@@ -122,7 +148,7 @@ function evaluateYesNo(entry, ctx) {
   const adverse = isYesAdverse(entry.id);
   const good = adverse ? answer === "no" : answer === "yes";
   return {
-    status: good ? "threshold" : "short",
+    status: yesNoVerdict(good, benchmark),
     measured: null,
     source: profileSource(ctx, entry.id),
     detail: answer === "yes" ? "Yes" : "No",
@@ -178,7 +204,7 @@ function evaluateNumeric(entry, ctx, benchmark) {
  */
 function evaluateEntry(entry, ctx, benchmark) {
   if (entry.input === "yesno") {
-    return evaluateYesNo(entry, ctx);
+    return evaluateYesNo(entry, ctx, benchmark);
   }
   if (entry.input === "number") {
     return evaluateNumeric(entry, ctx, benchmark);
