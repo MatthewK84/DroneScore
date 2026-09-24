@@ -5,11 +5,13 @@ import { createAuthRouter, sessionMiddleware } from "./auth.js";
 import { config } from "./config.js";
 import { createPool, migrate } from "./db.js";
 import { createMailer } from "./mailer.js";
+import { createBenchmarkPresetsRouter } from "./routes/benchmark-presets.js";
 import { createCatalogRouter } from "./routes/catalog.js";
 import { createCriteriaRouter } from "./routes/criteria.js";
 import { createOperationsRouter } from "./routes/operations.js";
 import { createPublicRouter } from "./routes/public.js";
 import { createReadonlyRouter } from "./routes/readonly.js";
+import { createReportsRouter } from "./routes/reports.js";
 import { createSupportRouter } from "./routes/support.js";
 import { createVendorRouter, SHEET_BODY_LIMIT } from "./routes/vendor.js";
 
@@ -64,7 +66,9 @@ function buildApp(pool, mailer) {
   app.use("/api", createReadonlyRouter(pool, config));
   app.use("/api", createCatalogRouter(pool));
   app.use("/api", createCriteriaRouter(pool, config));
+  app.use("/api", createBenchmarkPresetsRouter(pool, config));
   app.use("/api", createOperationsRouter(pool, config, mailer));
+  app.use("/api", createReportsRouter(pool, config));
   app.use("/api", createSupportRouter(pool));
   app.use("/api", createVendorRouter(pool));
   app.use("/api", (_req, res) => {

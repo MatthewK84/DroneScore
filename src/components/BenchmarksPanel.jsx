@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiError, deriveBenchmarkDefaults, listBenchmarks, saveBenchmark } from "../api.js";
 import { C, MONO, st } from "../styles.js";
+import { TimelinePresetsPanel } from "./TimelinePresetsPanel.jsx";
 import { Loading, Notice } from "./ui.jsx";
 
 /**
@@ -23,6 +24,12 @@ const EMPTY_INPUTS = Object.freeze({
   cycleS: "30",
   launchToDefeatS: "10",
 });
+
+/** The two ways to derive presets. The group-ceiling card is unchanged. */
+const MODES = Object.freeze([
+  { key: "ceiling", label: "Group ceiling" },
+  { key: "timeline", label: "Timeline budget (C4 ETA)" },
+]);
 
 /** A blank manual benchmark entry. */
 const EMPTY_MANUAL = Object.freeze({
@@ -85,6 +92,7 @@ export function BenchmarksPanel({ catalog, interceptors, isAdmin }) {
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState("ceiling");
 
   const reload = useCallback(async () => {
     try {
@@ -158,11 +166,17 @@ export function BenchmarksPanel({ catalog, interceptors, isAdmin }) {
     <div>
       <Notice tone="warn">
         Section 4.2 requires Threshold and Objective values to be documented before test
-        execution. Any KPP left without one prints as not established on the report, which
+        execution. Any KPP left without one prints as Not Assessed on the report, which
         is an open action against the evaluation rather than a pass.
       </Notice>
 
-      {isAdmin ? (
+      <ModeSwitch mode={mode} onMode={setMode} />
+
+      {mode === "timeline" ? (
+        <TimelinePresetsPanel interceptors={interceptors} benchmarks={benchmarks} isAdmin={isAdmin} onWritten={reload} />
+      ) : null}
+
+      {mode === "ceiling" && isAdmin ? (
         <DerivationCard
           inputs={inputs}
           groups={catalog.groups}
@@ -171,7 +185,7 @@ export function BenchmarksPanel({ catalog, interceptors, isAdmin }) {
         />
       ) : null}
 
-      {derived.length > 0 ? (
+      {mode === "ceiling" && derived.length > 0 ? (
         <DerivedList entries={derived} onAccept={accept} busy={busy} isAdmin={isAdmin} />
       ) : null}
 
@@ -181,6 +195,34 @@ export function BenchmarksPanel({ catalog, interceptors, isAdmin }) {
 
       {error ? <p style={st.error}>{error}</p> : null}
       {status ? <Notice tone="info">{status}</Notice> : null}
+    </div>
+  );
+}
+
+/** Chooses between the group-ceiling derivation and the timeline presets. */
+function ModeSwitch({ mode, onMode }) {
+  return (
+    <div style={{ display: "flex", gap: 8, marginBottom: 16 }} role="tablist">
+      {MODES.map((entry) => {
+        const active = entry.key === mode;
+        return (
+          <button
+            key={entry.key}
+            role="tab"
+            aria-selected={active}
+            onClick={() => onMode(entry.key)}
+            style={{
+              ...st.ghostBtn,
+              flex: 1,
+              borderColor: active ? C.olive : C.line,
+              color: active ? C.panel : C.ink,
+              background: active ? C.olive : C.panel,
+            }}
+          >
+            {entry.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -395,7 +437,7 @@ function StoredList({ benchmarks, interceptors }) {
     return (
       <div style={st.card}>
         <h2 style={st.secHead}>Stored Benchmarks</h2>
-        <p style={st.meta}>None stored yet. Every KPP will print as not established.</p>
+        <p style={st.meta}>None stored yet. Every KPP will print as Not Assessed.</p>
       </div>
     );
   }

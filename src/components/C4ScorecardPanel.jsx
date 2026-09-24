@@ -20,12 +20,15 @@ import { Loading, Notice } from "./ui.jsx";
  * is kept out of the score rather than counted as a pass.
  */
 
+/** What every row, area, or overall score without a score reads as. */
+const NOT_ASSESSED = "Not Assessed";
+
 const STATE_LABELS = Object.freeze({
   scored: "",
   not_applicable: "N/A",
   reported: "Reported",
-  no_benchmark: "No T/O",
-  not_measured: "No data",
+  no_benchmark: NOT_ASSESSED,
+  not_measured: NOT_ASSESSED,
   claimed: "Claimed",
 });
 
@@ -41,7 +44,7 @@ const SCORING_RULES = Object.freeze([
 
 /** @returns {string} A score or its state, rendered for the Score column. */
 function scoreText(row) {
-  return row.state === "scored" ? String(row.score) : STATE_LABELS[row.state] || "--";
+  return row.state === "scored" ? String(row.score) : STATE_LABELS[row.state] || NOT_ASSESSED;
 }
 
 /** @returns {string} A benchmark limit rendered for the screen. */
@@ -51,7 +54,7 @@ function limit(value) {
 
 /** @returns {string} An area or overall score rendered out of two. */
 function outOfTwo(value) {
-  return value === null || value === undefined ? "--" : `${value.toFixed(2)} / 2`;
+  return value === null || value === undefined ? NOT_ASSESSED : `${value.toFixed(2)} / 2`;
 }
 
 /** @param {{ isAdmin: boolean, interceptors: object[] }} props */
@@ -314,14 +317,14 @@ function ScoreHeader({ pkg }) {
   return (
     <div style={st.card}>
       <h2 style={st.secHead}>Overall System Score</h2>
-      <div style={{ fontFamily: MONO, fontSize: 40, color: C.olive, lineHeight: 1 }}>
+      <div style={{ fontFamily: MONO, fontSize: scorecard.overall === null ? 26 : 40, color: C.olive, lineHeight: 1 }}>
         {outOfTwo(scorecard.overall)}
       </div>
       <p style={{ ...st.meta, marginTop: 6 }}>
         Weighted average of the five Core Capability Areas at equal weight.{" "}
         {scorecard.states.scored} of {scorecard.total} rows carry a score. Of the rest:{" "}
-        {scorecard.states.no_benchmark} with no Threshold or Objective stored,{" "}
-        {scorecard.states.not_measured} with no measurement yet,{" "}
+        {scorecard.states.no_benchmark} Not Assessed with no Threshold or Objective stored,{" "}
+        {scorecard.states.not_measured} Not Assessed with no measurement yet,{" "}
         {scorecard.states.reported} reported as specifications the criteria do not score,{" "}
         {scorecard.states.claimed} vendor performance claims not yet demonstrated,{" "}
         {scorecard.states.not_applicable} marked not applicable. Only scored rows enter
@@ -337,8 +340,8 @@ function ScoreHeader({ pkg }) {
         {scorecard.areas.map((area) => (
           <div key={area.id} style={{ textAlign: "center", padding: "8px 4px", border: `1px solid ${C.line}`, borderRadius: 8 }}>
             <div style={{ ...st.stripLabel, color: C.inkMuted }}>Criterion {area.id}</div>
-            <div style={{ fontFamily: MONO, fontSize: 20, color: area.score === null ? C.inkMuted : C.olive }}>
-              {area.score === null ? "--" : area.score.toFixed(2)}
+            <div style={{ fontFamily: MONO, fontSize: area.score === null ? 12 : 20, color: area.score === null ? C.inkMuted : C.olive }}>
+              {area.score === null ? NOT_ASSESSED : area.score.toFixed(2)}
             </div>
             <div style={{ ...st.meta, fontSize: 10 }}>
               {area.states.scored}/{area.total} scored

@@ -399,7 +399,7 @@ function ScorecardStrip({ systems }) {
 
 /** One system's overall score, area scores, and effectiveness flag. */
 function SystemLine({ name, scorecard, showName }) {
-  const overall = scorecard.overall === null ? "--" : scorecard.overall.toFixed(2);
+  const overall = scorecard.overall === null ? "Not Assessed" : scorecard.overall.toFixed(2);
   return (
     <div style={{ paddingTop: showName ? 10 : 0, marginTop: showName ? 6 : 0, borderTop: showName ? `1px solid ${C.line}` : "none" }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
@@ -417,8 +417,8 @@ function SystemLine({ name, scorecard, showName }) {
         {scorecard.areas.map((area) => (
           <div key={area.id} style={{ textAlign: "center", padding: "6px 2px", border: `1px solid ${C.line}`, borderRadius: 8 }}>
             <div style={{ ...st.stripLabel, fontSize: 9, color: C.inkMuted }}>Crit {area.id}</div>
-            <div style={{ fontFamily: MONO, fontSize: 17, color: area.score === null ? C.inkMuted : C.olive }}>
-              {area.score === null ? "--" : area.score.toFixed(2)}
+            <div style={{ fontFamily: MONO, fontSize: area.score === null ? 10 : 17, color: area.score === null ? C.inkMuted : C.olive }}>
+              {area.score === null ? "Not Assessed" : area.score.toFixed(2)}
             </div>
           </div>
         ))}

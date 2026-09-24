@@ -8,11 +8,13 @@ export class ApiError extends Error {
   /**
    * @param {string} message
    * @param {number} status HTTP status, or 0 for a network failure.
+   * @param {object | null} [details] Parsed error body, when the server sent one.
    */
-  constructor(message, status) {
+  constructor(message, status, details = null) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.details = details;
   }
 }
 
@@ -42,7 +44,7 @@ async function request(method, path, body) {
   }
   if (!response.ok) {
     const message = data?.error || `Request failed (${response.status}).`;
-    throw new ApiError(message, response.status);
+    throw new ApiError(message, response.status, data);
   }
   return data ?? {};
 }
@@ -147,6 +149,19 @@ export function openWor(id) {
   window.open(`/api/days/${id}/wor.pdf`, "_blank", "noopener");
 }
 
+/**
+ * Opens the final evaluation report for every closed day in a range.
+ * Blank bounds leave that end of the range open.
+ * @param {string} from YYYY-MM-DD, or "".
+ * @param {string} to YYYY-MM-DD, or "".
+ * @returns {void}
+ */
+export function openFinalReport(from, to) {
+  const pairs = [["from", from], ["to", to]].filter(([, value]) => value);
+  const query = pairs.map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join("&");
+  window.open(`/api/reports/final.pdf${query ? `?${query}` : ""}`, "_blank", "noopener");
+}
+
 /** @returns {Promise<{ location: string, weather: object|null, assessments: object[] }>} */
 export function getConditions() {
   return request("GET", "/public/conditions");
@@ -225,6 +240,36 @@ export function deleteBenchmark(id) {
  */
 export function deriveBenchmarkDefaults(params) {
   return request("POST", "/criteria/benchmarks/derive", params);
+}
+
+/**
+ * The C4 ETA 60/180 default parameters and the payload types a system can
+ * carry, for the timeline preset form.
+ * @returns {Promise<{ params: object, payloadTypes: string[], defaultPayloadTypes: string[] }>}
+ */
+export function getTimelineDefaults() {
+  return request("GET", "/criteria/benchmarks/timeline-defaults");
+}
+
+/**
+ * Resolves every timeline preset for a parameter set. Nothing is stored.
+ * A 400 carries every validation error in `details.errors`.
+ * @param {object} params TimelineParams, numbers or numeric strings.
+ * @param {string[]} payloadTypes
+ * @returns {Promise<{ rows: object[], milestones: object[] }>}
+ */
+export function deriveTimelinePresets(params, payloadTypes) {
+  return request("POST", "/criteria/benchmarks/derive-timeline", { params, payloadTypes });
+}
+
+/**
+ * Writes preset rows in one transaction. A 409 carries the rows that
+ * would change in `details.conflicts`; resend with confirmOverwrite true.
+ * @param {{ interceptorId: number | null, uasGroup: string, confirmOverwrite: boolean, items: object[] }} body
+ * @returns {Promise<{ benchmarks: object[], written: number, unchanged: number }>}
+ */
+export function applyBenchmarksBulk(body) {
+  return request("PUT", "/criteria/benchmarks/bulk", body);
 }
 
 /** @returns {Promise<object>} */

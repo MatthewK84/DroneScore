@@ -59,12 +59,12 @@ function orNa(value, suffix = "") {
 }
 
 /** @returns {string} Pk formatted to two decimals, or "N/A". */
-function fmtPk(pk) {
+export function fmtPk(pk) {
   return pk === null ? "N/A" : pk.toFixed(2);
 }
 
 /** @returns {object} Section heading block. */
-function heading(number, title) {
+export function heading(number, title) {
   return {
     text: `SECTION ${number}. ${title.toUpperCase()}`,
     style: "sectionHead",
@@ -73,7 +73,7 @@ function heading(number, title) {
 }
 
 /** @returns {object} Subsection heading block. */
-function subheading(title) {
+export function subheading(title) {
   return {
     text: title,
     bold: true,
@@ -84,7 +84,7 @@ function subheading(title) {
 }
 
 /** @returns {object} A bordered two-column key/value table. */
-function kvTable(pairs) {
+export function kvTable(pairs) {
   return {
     table: {
       widths: [150, "*"],
@@ -160,8 +160,13 @@ function buildOverview(day, engagements, timezone) {
   ]);
 }
 
-/** @returns {object[]} Section 3 environmental conditions content. */
-function buildConditions(day, stats) {
+/**
+ * @param {object} day Day row, or any record carrying a weather_note.
+ * @param {object} stats Output of computeDayStats.
+ * @param {string} [span] What the report covers, for the no-data line.
+ * @returns {object[]} Section 3 environmental conditions content.
+ */
+export function buildConditions(day, stats, span = "this day") {
   const blocks = [];
   const wx = stats.weather;
   if (wx) {
@@ -182,7 +187,7 @@ function buildConditions(day, stats) {
     );
   } else {
     blocks.push({
-      text: "Automated weather observations were unavailable for this day.",
+      text: `Automated weather observations were unavailable for ${span}.`,
       italics: true,
     });
   }
@@ -275,7 +280,7 @@ function buildObservations(engagements, timezone) {
 }
 
 /** @returns {string} Deterministic assessment narrative. */
-function buildNarrative(stats) {
+export function buildNarrative(stats) {
   const sentences = [];
   for (const row of stats.byInterceptor.filter((r) => r.attempts > 0)) {
     let sentence = `${row.label} attempted ${row.attempts} intercepts and succeeded ${row.successes} times (Pk ${fmtPk(row.pk)}).`;
@@ -304,9 +309,37 @@ function buildNarrative(stats) {
   return sentences.join(" ");
 }
 
-/** @returns {object} Complete pdfmake document definition. */
-function buildDocDefinition(input) {
-  const { day, engagements, stats, controlNumber, timezone, classification, generatedAt } = input;
+/** @returns {object[]} Section 5: Red Air and abort performance tables. */
+export function buildPerformance(stats) {
+  return [
+    subheading("5a. Red Air Intercept Performance"),
+    ...[
+      statsTableTyped("By Interceptor", stats.byInterceptor, "Pk"),
+      statsTableTyped("By Target", stats.byDrone, "Pk"),
+      statsTableTyped("By UAS Group", stats.byGroup, "Pk"),
+      statsTableTyped("By Period", stats.byPeriod, "Pk"),
+    ].filter((block) => block !== null),
+    ...(stats.overall.total === 0
+      ? [{ text: "No Red Air intercept runs to analyze.", italics: true, margin: [0, 0, 0, 8] }]
+      : []),
+    subheading("5b. Abort Run Performance"),
+    ...(stats.abort.total === 0
+      ? [{ text: "No abort runs to analyze.", italics: true, margin: [0, 0, 0, 8] }]
+      : [statsTableTyped("By Interceptor", stats.abortByInterceptor, "Rate")].filter(
+          (block) => block !== null
+        )),
+  ];
+}
+
+/**
+ * The page setup every report shares: Letter size, the classification
+ * banner top and bottom, and the control number and page count in the
+ * footer.
+ *
+ * @param {{ controlNumber: string, classification: string, content: object[] }} input
+ * @returns {object} A pdfmake document definition.
+ */
+export function documentShell({ controlNumber, classification, content }) {
   return {
     pageSize: "LETTER",
     pageMargins: [46, 58, 46, 52],
@@ -330,6 +363,16 @@ function buildDocDefinition(input) {
       ],
       margin: [46, 14, 46, 0],
     }),
+    content,
+  };
+}
+
+/** @returns {object} Complete pdfmake document definition. */
+function buildDocDefinition(input) {
+  const { day, engagements, stats, controlNumber, timezone, classification, generatedAt } = input;
+  return documentShell({
+    controlNumber,
+    classification,
     content: [
       { text: "WARFIGHTER OBSERVATION REPORT", style: "title", alignment: "center" },
       {
@@ -366,22 +409,7 @@ function buildDocDefinition(input) {
         "No intentional abort runs were logged on this date."
       ),
       heading(5, "Performance Analysis"),
-      subheading("5a. Red Air Intercept Performance"),
-      ...[
-        statsTableTyped("By Interceptor", stats.byInterceptor, "Pk"),
-        statsTableTyped("By Target", stats.byDrone, "Pk"),
-        statsTableTyped("By UAS Group", stats.byGroup, "Pk"),
-        statsTableTyped("By Period", stats.byPeriod, "Pk"),
-      ].filter((block) => block !== null),
-      ...(stats.overall.total === 0
-        ? [{ text: "No Red Air intercept runs to analyze.", italics: true, margin: [0, 0, 0, 8] }]
-        : []),
-      subheading("5b. Abort Run Performance"),
-      ...(stats.abort.total === 0
-        ? [{ text: "No abort runs to analyze.", italics: true, margin: [0, 0, 0, 8] }]
-        : [statsTableTyped("By Interceptor", stats.abortByInterceptor, "Rate")].filter(
-            (block) => block !== null
-          )),
+      ...buildPerformance(stats),
       heading(6, "Scorer Observations"),
       ...buildObservations(engagements, timezone),
       heading(7, "Assessment"),
@@ -397,14 +425,14 @@ function buildDocDefinition(input) {
       heading(11, "Benchmark Basis"),
       ...buildBasisSection(input.criteria),
     ],
-  };
+  });
 }
 
 /**
  * @param {object} docDefinition
  * @returns {Promise<Buffer>} Rendered PDF bytes.
  */
-function renderPdf(docDefinition) {
+export function renderPdf(docDefinition) {
   return new Promise((resolve, reject) => {
     try {
       const printer = new PdfPrinter(FONTS);
