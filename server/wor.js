@@ -4,6 +4,7 @@ import { compactDate, formatDateLong, formatTimeLocal } from "./time.js";
 import {
   buildBasisSection,
   buildMatrixSection,
+  buildNotAssessableSection,
   buildSystemComparisonSection,
   buildSystemSections,
 } from "./wor-criteria.js";
@@ -424,6 +425,9 @@ function buildDocDefinition(input) {
       ...buildMatrixSection(input.criteria),
       heading(11, "Benchmark Basis"),
       ...buildBasisSection(input.criteria),
+      { text: "", pageBreak: "before" },
+      heading(12, "Not Repeatably Assessable"),
+      ...buildNotAssessableSection(),
     ],
   });
 }

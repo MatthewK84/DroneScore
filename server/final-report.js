@@ -7,6 +7,7 @@ import { compactDate, formatDateLong, formatTimeLocal } from "./time.js";
 import {
   buildBasisSection,
   buildMatrixSection,
+  buildNotAssessableSection,
   buildSystemComparisonSection,
   buildSystemSections,
   EVENT_PERIOD,
@@ -269,6 +270,9 @@ function reportContent(input) {
     ...buildMatrixSection(criteria),
     heading(11, "Benchmark Basis"),
     ...buildBasisSection(criteria),
+    { text: "", pageBreak: "before" },
+    heading(12, "Not Repeatably Assessable"),
+    ...buildNotAssessableSection(),
   ];
 }
 
