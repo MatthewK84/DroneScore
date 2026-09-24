@@ -1,3 +1,4 @@
+import { assessedOnly } from "./not-assessable.js";
 import { GROUP_KINEMATICS } from "./thresholds.js";
 import { PAYLOAD_TYPES, TIMELINE_PRESETS } from "./timeline-presets.js";
 import { resolveTimelinePresets, timelineMilestones, validateTimelineParams } from "./timeline-profile.js";
@@ -189,7 +190,8 @@ function storageFor(row) {
 
 /**
  * Resolves every preset for a validated request, in storage units, with
- * the values a write would store attached as `store`.
+ * the values a write would store attached as `store`. Rows the evaluation
+ * does not assess are left out, so no click can benchmark them.
  *
  * @param {object} params Validated TimelineParams.
  * @param {string[]} payloadTypes Validated payload types.
@@ -197,7 +199,7 @@ function storageFor(row) {
  */
 export function buildTimelinePreview(params, payloadTypes) {
   const resolved = resolveTimelinePresets(params, payloadTypes);
-  const rows = resolved.ok ? resolved.rows.map(convertUnits) : [];
+  const rows = resolved.ok ? assessedOnly(resolved.rows).map(convertUnits) : [];
   return {
     rows: rows.map((row) => ({ ...row, store: storageFor(row) })),
     milestones: timelineMilestones(params),

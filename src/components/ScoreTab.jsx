@@ -13,7 +13,7 @@ import {
 import { useStopwatch } from "../hooks.js";
 import { C, MONO, st } from "../styles.js";
 import { Loading, Notice } from "./ui.jsx";
-import { AdvancedMeasures, OUTCOME_FOR_STAGE, SCENARIOS, StagePicker } from "./StagePicker.jsx";
+import { SCENARIOS } from "./StagePicker.jsx";
 import { WeatherPanel } from "./WeatherPanel.jsx";
 
 /**
@@ -63,7 +63,7 @@ const EMPTY_FORM = Object.freeze({
   interceptorId: "",
   testProfileId: "",
   runType: "red_air",
-  stageReached: "defeat",
+  stageReached: null,
   outcome: "success",
   scenario: "mlcoa",
   timeToInterceptS: "",
@@ -184,19 +184,18 @@ export function ScoreTab({ isAdmin }) {
   }, [reload]);
 
   /**
-   * Setting the stage also sets the outcome. The two are not independent:
-   * a run that reached defeat is a success, one that reached engage is a
-   * miss, and one that stopped earlier was never an engagement. Coupling
-   * them keeps the outcome based Pk in section 5 of the report and the
-   * stage based Pk in MOP 3.1.2 in agreement on new data. The scorer can
-   * still override the outcome afterwards if a run does not fit.
+   * The kill chain stage picker is gone because every stage before engage
+   * is a Ground Control Station event a range scorer cannot see. New runs
+   * record no stage, so the scorer infers it from the outcome. An older
+   * run keeps the stage it was logged with until its outcome changes; then
+   * the stored stage no longer fits and is cleared.
    */
   const setField = useCallback((key, value) => {
     setForm((prev) => {
-      if (key !== "stageReached") {
+      if (key !== "outcome" || value === prev.outcome) {
         return { ...prev, [key]: value };
       }
-      return { ...prev, stageReached: value, outcome: OUTCOME_FOR_STAGE[value] || prev.outcome };
+      return { ...prev, outcome: value, stageReached: null };
     });
   }, []);
 
@@ -241,7 +240,7 @@ export function ScoreTab({ isAdmin }) {
       interceptorId: engagement.interceptorId === null ? "" : String(engagement.interceptorId),
       testProfileId: engagement.testProfileId === null ? "" : String(engagement.testProfileId),
       runType: engagement.runType || "red_air",
-      stageReached: engagement.stageReached || "defeat",
+      stageReached: engagement.stageReached ?? null,
       outcome: engagement.outcome,
       timeToInterceptS: formValue(engagement.timeToInterceptS),
       engagementRangeM: formValue(engagement.engagementRangeM),
@@ -449,7 +448,6 @@ function EngagementForm(props) {
     ],
     [testProfiles]
   );
-  const isAbort = form.runType === "abort";
   return (
     <div style={st.card}>
       <h2 style={st.secHead}>{editingId === null ? "Log Engagement" : "Edit Engagement"}</h2>
@@ -548,12 +546,6 @@ function EngagementForm(props) {
           );
         })}
       </div>
-      {isAbort ? null : (
-        <StagePicker value={form.stageReached} onChange={(key) => setField("stageReached", key)} />
-      )}
-      {isAbort ? null : (
-        <AdvancedMeasures form={form} setField={setField} stage={form.stageReached} />
-      )}
       <span style={st.label}>Outcome</span>
       <div style={{ ...st.outcomeRow, marginBottom: 14 }}>
         {outcomesFor(form.runType).map((option) => {
@@ -575,19 +567,9 @@ function EngagementForm(props) {
         })}
       </div>
       <Stopwatch stopwatch={stopwatch} onUse={onUseStopwatch} />
-      <div style={st.grid2}>
-        <label style={st.field}>
-          <span style={st.label}>Time to intercept (s)</span>
-          <input style={st.input} type="number" inputMode="decimal" value={form.timeToInterceptS} onChange={(e) => setField("timeToInterceptS", e.target.value)} />
-        </label>
-        <label style={st.field}>
-          <span style={st.label}>Range (m)</span>
-          <input style={st.input} type="number" inputMode="decimal" value={form.engagementRangeM} onChange={(e) => setField("engagementRangeM", e.target.value)} />
-        </label>
-      </div>
       <label style={st.field}>
-        <span style={st.label}>Altitude (m)</span>
-        <input style={st.input} type="number" inputMode="decimal" value={form.altitudeM} onChange={(e) => setField("altitudeM", e.target.value)} />
+        <span style={st.label}>Time to intercept (s)</span>
+        <input style={st.input} type="number" inputMode="decimal" value={form.timeToInterceptS} onChange={(e) => setField("timeToInterceptS", e.target.value)} />
       </label>
       <label style={st.field}>
         <span style={st.label}>Notes</span>

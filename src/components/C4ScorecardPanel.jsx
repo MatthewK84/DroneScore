@@ -321,8 +321,9 @@ function ScoreHeader({ pkg }) {
         {outOfTwo(scorecard.overall)}
       </div>
       <p style={{ ...st.meta, marginTop: 6 }}>
-        Weighted average of the five Core Capability Areas at equal weight.{" "}
-        {scorecard.states.scored} of {scorecard.total} rows carry a score. Of the rest:{" "}
+        Equal-weight average of the Core Capability Areas that carry a score.{" "}
+        {scorecard.notAssessable ?? 0} rows are Not Repeatably Assessable and are left out.{" "}
+        {scorecard.states.scored} of the {scorecard.total} assessed rows carry a score. Of the rest:{" "}
         {scorecard.states.no_benchmark} Not Assessed with no Threshold or Objective stored,{" "}
         {scorecard.states.not_measured} Not Assessed with no measurement yet,{" "}
         {scorecard.states.reported} reported as specifications the criteria do not score,{" "}
@@ -368,9 +369,7 @@ function AreaCard({ area, canMark, busyRow, onToggle }) {
         Criterion {area.id} - {area.name}
       </h2>
       {area.note ? <p style={{ ...st.meta, marginBottom: 8 }}>{area.note}</p> : null}
-      <p style={{ ...st.meta, marginBottom: 12 }}>
-        Area score {outOfTwo(area.score)} from {area.states.scored} of {area.total} rows.
-      </p>
+      <p style={{ ...st.meta, marginBottom: 12 }}>{areaSummary(area)}</p>
       {area.sections.map((section) => (
         <SectionTable
           key={section.title}
@@ -382,6 +381,15 @@ function AreaCard({ area, canMark, busyRow, onToggle }) {
       ))}
     </div>
   );
+}
+
+/** @returns {string} An area's score, row counts, and how many rows it left out. */
+function areaSummary(area) {
+  if (area.total === 0) {
+    return "Every row in this area is Not Repeatably Assessable. See that view for the reason for each.";
+  }
+  const moved = area.notAssessable > 0 ? ` ${area.notAssessable} more are Not Repeatably Assessable.` : "";
+  return `Area score ${outOfTwo(area.score)} from ${area.states.scored} of ${area.total} rows.${moved}`;
 }
 
 /** One criteria table, reproduced column for column. */

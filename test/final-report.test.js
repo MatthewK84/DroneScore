@@ -76,8 +76,8 @@ test("runs pool across days and flow counters sum over the days a system flew", 
   const sica = criteria.systems.find((pkg) => pkg.system.name === "SICA");
   const reddi = criteria.systems.find((pkg) => pkg.system.name === "REDDI");
   assert.equal(sica.runs, 2);
-  assert.equal(mop(sica, "1.1.4").value, 0.2, "3 false alarms over 15 hours");
-  assert.equal(mop(reddi, "1.1.4").value, 0.25, "REDDI flew day 1 only: 2 over 8 hours");
+  assert.equal(mop(sica, "4.2.1").value, 900, "900 operating minutes over one abort across both days");
+  assert.equal(mop(reddi, "4.2.1").value, 480, "REDDI flew day 1 only: 480 minutes over one abort");
   assert.deepEqual(criteria.closeout, { completeDays: 2, partialDays: 0 });
 });
 

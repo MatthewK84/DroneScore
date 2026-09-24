@@ -2,11 +2,12 @@ import express from "express";
 import { requireRole } from "../auth.js";
 import { primarySystem } from "../compliance.js";
 import { CRITERIA, KILL_CHAIN, SCENARIOS } from "../criteria.js";
-import { C4_AREAS, C4_SUPPORTING, isNaKey, isScorecardRowId, isVerdictKey } from "../c4.js";
+import { C4_SUPPORTING, isNaKey, isScorecardRowId, isVerdictKey } from "../c4.js";
 import { retainSources } from "../provenance.js";
 import { assembleSystem, assembleSystems, countUnassigned } from "../systems.js";
+import { assessedCatalogView, describeNotAssessable, NOT_ASSESSABLE } from "../not-assessable.js";
 import { AIRFRAME_INPUTS, isAirframeInputKey } from "../vendor-template.js";
-import { catalogByCategory, isKnownKppId, KPP_CATALOG, PERFORMANCE_CLAIM_IDS } from "../kpp-catalog.js";
+import { isKnownKppId, PERFORMANCE_CLAIM_IDS } from "../kpp-catalog.js";
 import { deriveBenchmarks, GROUP_KINEMATICS } from "../thresholds.js";
 import { asId, asOptionalInteger, asOptionalNumber, asProfile, asText, requiredText } from "../validate.js";
 
@@ -343,16 +344,19 @@ export function createCriteriaRouter(pool, config) {
   const router = express.Router();
 
   router.get("/criteria/catalog", requireRole("scorer"), (_req, res) => {
+    const assessed = assessedCatalogView();
     return res.json({
       success: true,
       criteria: CRITERIA,
       killChain: KILL_CHAIN,
-      catalog: KPP_CATALOG,
-      categories: catalogByCategory(),
+      catalog: assessed.catalog,
+      categories: assessed.categories,
       groups: GROUP_KINEMATICS,
       narrativeMops: NARRATIVE_MOP_KEYS,
-      areas: C4_AREAS,
+      areas: assessed.areas,
       supporting: C4_SUPPORTING,
+      notAssessable: describeNotAssessable(),
+      notAssessableIds: NOT_ASSESSABLE.map((row) => row.id),
       scenarios: SCENARIOS,
       airframeInputs: AIRFRAME_INPUTS,
       performanceClaims: PERFORMANCE_CLAIM_IDS,

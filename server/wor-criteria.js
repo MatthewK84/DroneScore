@@ -1,4 +1,5 @@
 import { CRITERIA } from "./criteria.js";
+import { describeNotAssessable, isNotAssessable } from "./not-assessable.js";
 import { formatQuantity } from "./units.js";
 
 /**
@@ -463,8 +464,10 @@ function scorecardSummary(scorecard, period) {
   return [
     {
       text:
-        `Overall System Score ${overall}, the weighted average of the five Core Capability ` +
-        `Areas at equal weight. ${scorecard.states.scored} of ${scorecard.total} rows carry ` +
+        `Overall System Score ${overall}, the equal-weight average of the Core Capability ` +
+        `Areas that carry a score. ${scorecard.notAssessable ?? 0} rows are Not Repeatably ` +
+        `Assessable and are left out; section 12 lists them with the reason for each. ` +
+        `${scorecard.states.scored} of the ${scorecard.total} assessed rows carry ` +
         `a score. Of the rest: ${scorecard.states.no_benchmark} Not Assessed with no Threshold or ` +
         `Objective stored, ${scorecard.states.not_measured} Not Assessed with no measurement ${period.when}, ` +
         `${scorecard.states.reported} reported as specifications the criteria do not score, ` +
@@ -506,7 +509,17 @@ function effectivenessVerdict(scorecard, period) {
   ];
 }
 
-/** @returns {object[]} Section 12: the consolidated C4 scorecard. */
+/** @returns {string} An area's score and row counts for its heading. */
+function areaHeadline(area) {
+  if (area.total === 0) {
+    return "every row is Not Repeatably Assessable (section 12)";
+  }
+  const score = area.score === null ? NOT_ASSESSED : `${area.score.toFixed(2)} of 2`;
+  const moved = area.notAssessable > 0 ? `; ${area.notAssessable} Not Repeatably Assessable` : "";
+  return `${score} from ${area.states.scored} of ${area.total} rows${moved}`;
+}
+
+/** @returns {object[]} The consolidated C4 scorecard for one system. */
 function buildScorecardSection(criteria) {
   const scorecard = criteria?.scorecard;
   if (!scorecard) {
@@ -515,9 +528,8 @@ function buildScorecardSection(criteria) {
   const period = periodOf(criteria);
   const blocks = [...scorecardSummary(scorecard, period), ...effectivenessVerdict(scorecard, period)];
   for (const area of scorecard.areas) {
-    const score = area.score === null ? NOT_ASSESSED : `${area.score.toFixed(2)} of 2`;
     blocks.push({
-      text: `Criterion ${area.id} - ${area.name}: ${score} from ${area.states.scored} of ${area.total} rows`,
+      text: `Criterion ${area.id} - ${area.name}: ${areaHeadline(area)}`,
       bold: true,
       fontSize: 9,
       color: INK,
@@ -638,6 +650,15 @@ function attributionNote(criteria) {
   return parts.join(" ");
 }
 
+/** @returns {string} A sentence naming areas left with no assessed rows, or "". */
+function emptyAreasNote(scorecard) {
+  const empty = (scorecard?.areas || []).filter((area) => area.total === 0).map((area) => `C${area.id}`);
+  if (empty.length === 0) {
+    return "";
+  }
+  return `${empty.join(" and ")} carry no assessed rows, so they read Not Assessed; section 12 lists why. `;
+}
+
 /** @returns {object[]} Section 8: every system side by side. */
 export function buildSystemComparisonSection(criteria, stats) {
   const systems = criteria?.systems || [];
@@ -661,9 +682,10 @@ export function buildSystemComparisonSection(criteria, stats) {
     },
     {
       text:
-        "C1 through C5 are the Core Capability Area scores out of 2; Overall is their equal-weight " +
-        "average. Pk is the outcome-based figure from section 5. Each system's full characterization " +
-        "follows in section 9.",
+        "C1 through C5 are the Core Capability Area scores out of 2; Overall is the equal-weight " +
+        "average of the areas that carry a score. Pk is the outcome-based figure from section 5, " +
+        `reported rather than scored. ${emptyAreasNote(systems[0].scorecard)}Each system's full ` +
+        "characterization follows in section 9.",
       fontSize: 7.5,
       italics: true,
       color: "#5A6355",
@@ -687,6 +709,17 @@ function systemNote(pkg) {
   );
 }
 
+/**
+ * @returns {object[]} The engagement timeline part, or nothing while the
+ *   timeline is on the Not Repeatably Assessable list.
+ */
+function timelineBlocks(pkg) {
+  if (isNotAssessable("timeline")) {
+    return [];
+  }
+  return [partHeading("Engagement Timeline Analysis"), ...buildTimelineSection(pkg)];
+}
+
 /** @returns {object[]} One system's complete characterization. */
 function systemBlocks(pkg, index, stats) {
   return [
@@ -706,8 +739,7 @@ function systemBlocks(pkg, index, stats) {
     ...buildComplianceSection(pkg),
     partHeading("C4 Scorecard: Core Capability Areas"),
     ...buildScorecardSection(pkg),
-    partHeading("Engagement Timeline Analysis"),
-    ...buildTimelineSection(pkg),
+    ...timelineBlocks(pkg),
     partHeading("Vendor Declarations and Derivations"),
     ...buildDeclarationSection(pkg),
   ];
@@ -801,4 +833,43 @@ export function buildSystemSections(criteria, stats) {
     return noSystems(periodOf(criteria));
   }
   return [mopIntro(), ...systems.flatMap((pkg, index) => systemBlocks(pkg, index, stats))];
+}
+
+/** @returns {object} The table of rows left out for one reason. */
+function notAssessableTable(rows) {
+  const body = rows.map((row) => [{ text: row.label, bold: true }, row.measure, { text: row.why, fontSize: 7 }]);
+  return {
+    table: { headerRows: 1, widths: [58, 110, "*"], body: [headerRow(["ID", "Measure", "Why it is not assessed"]), ...body] },
+    layout: tableLayout(),
+    fontSize: 7.5,
+    margin: [0, 0, 0, 8],
+  };
+}
+
+/**
+ * The criteria this evaluation does not assess, grouped by reason, with the
+ * reason for every row. Printing them keeps the exclusion visible, because
+ * a row that silently vanishes from a formal evaluation reads as a pass.
+ *
+ * @returns {object[]}
+ */
+export function buildNotAssessableSection() {
+  const groups = describeNotAssessable().filter((group) => group.rows.length > 0);
+  const count = groups.reduce((sum, group) => sum + group.rows.length, 0);
+  const blocks = [
+    {
+      text:
+        `The evaluation does not assess these ${count} criteria. A range scorer cannot measure them ` +
+        "repeatably against a clear definition. They are left out of every score, count, and table " +
+        "above rather than reported as gaps.",
+      fontSize: 8,
+      margin: [0, 0, 0, 8],
+    },
+  ];
+  for (const group of groups) {
+    blocks.push({ text: `${group.title} (${group.rows.length})`, bold: true, fontSize: 9, color: INK, margin: [0, 6, 0, 3] });
+    blocks.push({ text: group.summary, fontSize: 7.5, italics: true, color: "#5A6355", margin: [0, 0, 0, 4] });
+    blocks.push(notAssessableTable(group.rows));
+  }
+  return blocks;
 }

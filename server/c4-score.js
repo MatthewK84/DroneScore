@@ -17,6 +17,7 @@
 
 import { C4_AREAS, C4_SUPPORTING, naKey, narrativeKey, verdictKey } from "./c4.js";
 import { flattenMops } from "./criteria.js";
+import { assessedOnly } from "./not-assessable.js";
 import { formatQuantity } from "./units.js";
 
 /** Compliance statuses mapped onto the 0/1/2 scale the criteria define. */
@@ -332,6 +333,49 @@ export function buildScorecard(mopGroups, complianceRows, profile, benchmarks) {
     overall: overallScore(areas),
     states: countStates(rows),
     total: rows.length,
+    criticalFailures: failures,
+    notMilitarilyEffective: failures.length > 0,
+  };
+}
+
+/** @returns {object} One scored area with the rows the evaluation does not assess left out. */
+function assessedArea(area) {
+  const sections = area.sections
+    .map((section) => ({ ...section, rows: assessedOnly(section.rows) }))
+    .filter((section) => section.rows.length > 0);
+  const rows = sections.flatMap((section) => section.rows);
+  return {
+    ...area,
+    sections,
+    score: meanScore(rows),
+    states: countStates(rows),
+    total: rows.length,
+    notAssessable: area.total - rows.length,
+  };
+}
+
+/**
+ * Restricts a scorecard to the rows the evaluation assesses. buildScorecard
+ * still scores the full catalog, so moving a row back onto the assessment
+ * needs no change here. Area scores, the overall score, the state counts,
+ * and the Critical flag are recomputed from the rows that remain, so a row
+ * that is not assessed can neither score nor read as a gap.
+ *
+ * @param {object} scorecard Output of buildScorecard.
+ * @returns {object} The same shape, plus `notAssessable` counts.
+ */
+export function assessedScorecard(scorecard) {
+  const areas = scorecard.areas.map(assessedArea);
+  const rows = areas.flatMap((area) => area.sections.flatMap((section) => section.rows));
+  const failures = criticalFailures(areas);
+  return {
+    ...scorecard,
+    areas,
+    supporting: scorecard.supporting.map((group) => ({ ...group, rows: assessedOnly(group.rows) })),
+    overall: overallScore(areas),
+    states: countStates(rows),
+    total: rows.length,
+    notAssessable: scorecard.total - rows.length,
     criticalFailures: failures,
     notMilitarilyEffective: failures.length > 0,
   };

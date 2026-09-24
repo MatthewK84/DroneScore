@@ -73,41 +73,45 @@ const DAY = {
 };
 
 test("each system's MOPs come from its own runs and nobody else's", () => {
-  const rows = [run({}), run({}), run({}), otherRun({})];
+  const rows = [run({}), run({}), run({}), otherRun({ outcome: "success", stage_reached: "defeat", time_to_intercept_s: 50 })];
   const [ki1, ki2] = assembleSystems(DAY, rows, []);
   assert.equal(ki1.system.name, "KI-1");
-  assert.equal(mopOf(ki1, "3.1.2").value, 1, "KI-1 defeated all three of its own engagements");
-  assert.equal(mopOf(ki1, "3.1.2").n, 3, "KI-2's miss is not in KI-1's denominator");
+  assert.equal(mopOf(ki1, "3.1.4").value.mean, 11, "KI-1's own three defeats at 11 s");
+  assert.equal(mopOf(ki1, "3.1.4").n, 3, "KI-2's defeat is not in KI-1's sample");
   assert.equal(ki2.system.name, "KI-2");
-  assert.equal(mopOf(ki2, "3.1.2").value, 0);
-  assert.equal(mopOf(ki2, "3.1.2").n, 1);
+  assert.equal(mopOf(ki2, "3.1.4").value.mean, 50);
+  assert.equal(mopOf(ki2, "3.1.4").n, 1);
 });
 
 test("the day review's headline package is the primary system alone", () => {
-  const rows = [run({}), run({}), run({}), otherRun({})];
+  const rows = [run({}), run({}), run({}), otherRun({ outcome: "success", stage_reached: "defeat", time_to_intercept_s: 50 })];
   const review = assembleReview(DAY, rows, [], { timezone: "UTC" });
   assert.equal(review.system.name, "KI-1");
   assert.deepEqual(review.system.others, ["KI-2"]);
-  assert.equal(mopOf(review, "3.1.2").n, 3, "the headline Pk is no longer blended across systems");
+  assert.equal(mopOf(review, "3.1.4").n, 3, "the headline defeat time is no longer blended across systems");
   assert.equal(review.systems.length, 2);
 });
 
 test("each system is scored against its own profile, not the first one found", () => {
-  const rows = [otherRun({ occurred_at: "2026-09-11T13:00:00Z" }), run({}), run({})];
-  const benchmarks = [benchmark("INT-1", 60, 100)];
+  const rows = [
+    otherRun({ occurred_at: "2026-09-11T13:00:00Z", interceptor_profile: { "INT-11": "240" } }),
+    run({ interceptor_profile: { "INT-11": "45" } }),
+    run({ interceptor_profile: { "INT-11": "45" } }),
+  ];
+  const benchmarks = [benchmark("INT-11", 180, 60)];
   const [ki1, ki2] = assembleSystems(DAY, rows, benchmarks);
-  const speed = (pkg) =>
-    pkg.scorecard.areas[2].sections[1].rows.find((row) => row.id === "INT-1");
-  assert.equal(speed(ki1).measured, 85, "KI-1 declared 85 even though KI-2 ran first");
-  assert.equal(speed(ki2).measured, 40);
-  assert.equal(speed(ki2).score, 0);
+  const reload = (pkg) =>
+    pkg.scorecard.areas[2].sections.flatMap((section) => section.rows).find((row) => row.id === "INT-11");
+  assert.equal(reload(ki1).measured, 45, "KI-1 declared 45 s even though KI-2 ran first");
+  assert.equal(reload(ki2).measured, 240);
+  assert.equal(reload(ki2).score, 0, "240 s misses a 180 s threshold where lower is better");
 });
 
 test("the day closeout applies to every system sharing the range that day", () => {
   const rows = [run({}), run({}), otherRun({})];
   const [ki1, ki2] = assembleSystems(DAY, rows, []);
-  assert.equal(mopOf(ki1, "1.1.4").value, 1, "two alarms over two hours");
-  assert.equal(mopOf(ki2, "1.1.4").value, 1, "KI-2 flew the same range space, so the same closeout");
+  assert.equal(mopOf(ki1, "4.2.2").value, 20, "20 repair minutes over one abort");
+  assert.equal(mopOf(ki2, "4.2.2").value, 20, "KI-2 flew the same range space, so the same closeout");
   assert.equal(mopOf(ki2, "4.2.1").value, 120, "120 operating minutes over one abort");
   assert.equal(mopOf(ki2, "4.2.1").value, mopOf(ki1, "4.2.1").value);
 });
@@ -125,7 +129,8 @@ test("runs with no interceptor are counted and kept out of every system", () => 
 test("a day with no runs still yields a scorecard to render", () => {
   const review = assembleReview(DAY, [], [], { timezone: "UTC" });
   assert.deepEqual(review.systems, []);
-  assert.equal(review.scorecard.total, 67);
+  assert.equal(review.scorecard.total, 10, "only the rows the evaluation assesses");
+  assert.equal(review.scorecard.notAssessable, 57);
   assert.equal(review.scorecard.overall, null);
 });
 
@@ -145,17 +150,17 @@ test("combined closeouts sum flows over complete days and keep the latest level"
 
 test("progress accumulates each system across days and records its history", () => {
   const engagements = [
-    run({ day_id: 1, day_date: "2026-09-10" }),
+    run({ day_id: 1, day_date: "2026-09-10", time_to_intercept_s: 20 }),
     run({ day_id: 1, day_date: "2026-09-10", outcome: "unsuccessful", stage_reached: "engage" }),
-    otherRun({ day_id: 1, day_date: "2026-09-10" }),
-    run({ day_id: 2, day_date: "2026-09-11" }),
-    run({ day_id: 2, day_date: "2026-09-11" }),
+    otherRun({ day_id: 1, day_date: "2026-09-10", outcome: "success", stage_reached: "defeat", time_to_intercept_s: 30 }),
+    run({ day_id: 2, day_date: "2026-09-11", time_to_intercept_s: 5 }),
+    run({ day_id: 2, day_date: "2026-09-11", time_to_intercept_s: 5 }),
   ];
   const days = [
     { ...DAY, id: 1, day_date: "2026-09-10" },
     { ...DAY, id: 2, day_date: "2026-09-11" },
   ];
-  const benchmarks = [benchmark("3.1.2", 60, 80, true)];
+  const benchmarks = [benchmark("3.1.4", 12, 5, true)];
   const { systems, unassignedRuns } = buildProgress(engagements, days, benchmarks, "UTC");
   assert.equal(unassignedRuns, 0);
   const [ki1, ki2] = systems;
@@ -165,12 +170,12 @@ test("progress accumulates each system across days and records its history", () 
   assert.equal(ki1.pk, 0.75, "three defeats in four engagements across both days");
   assert.equal(ki1.closeoutDays, 2, "KI-1 flew both days");
   assert.deepEqual(ki1.history.map((point) => point.date), ["2026-09-10", "2026-09-11"]);
-  assert.equal(ki1.history[0].overall, 0, "Pk 0.50 after day one is below the 60 percent threshold");
-  assert.equal(ki1.history[1].overall, 1, "Pk 0.75 by day two meets threshold");
+  assert.equal(ki1.history[0].overall, 0, "a 20 s mean defeat time after day one misses the 12 s threshold");
+  assert.equal(ki1.history[1].overall, 1, "a 10 s mean by day two meets threshold");
   assert.equal(ki1.notMilitarilyEffective, false);
   assert.equal(ki2.closeoutDays, 1, "KI-2 flew one day and takes that day's closeout");
-  assert.equal(ki2.notMilitarilyEffective, true, "KI-2's only engagement missed a Critical KPP");
-  assert.deepEqual(ki2.criticalFailures, [{ label: "MOP 3.1.2", measure: "Probability of Kill / Defeat (Pk)" }]);
+  assert.equal(ki2.notMilitarilyEffective, true, "KI-2's only defeat took 30 s against a Critical 12 s threshold");
+  assert.deepEqual(ki2.criticalFailures, [{ label: "MOP 3.1.4", measure: "Defeat Engagement Time" }]);
 });
 
 test("progress reports attainment counts that reconcile with the scored rows", () => {

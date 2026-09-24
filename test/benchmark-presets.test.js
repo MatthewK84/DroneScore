@@ -4,7 +4,8 @@ import express from "express";
 import { parseBulkRequest, planBulkWrite, presetStamp, stripStamp } from "../server/benchmark-presets.js";
 import { createBenchmarkPresetsRouter } from "../server/routes/benchmark-presets.js";
 import { parseBenchmark } from "../server/routes/criteria.js";
-import { NON_KINETIC_DEFAULT } from "../server/timeline-presets.js";
+import { isNotAssessable } from "../server/not-assessable.js";
+import { NON_KINETIC_DEFAULT, TIMELINE_PRESETS } from "../server/timeline-presets.js";
 import { C4_ETA_60_180 } from "../server/timeline-profile.js";
 
 const ACTOR = Object.freeze({ role: "admin", isoDate: "2026-09-24" });
@@ -88,10 +89,12 @@ after(async () => {
   await server.close();
 });
 
-test("derive-timeline returns every preset row with its milestones", async () => {
+test("derive-timeline returns every assessed preset row with its milestones", async () => {
   const { status, body } = await call(`${server.url}/criteria/benchmarks/derive-timeline`, "POST", "scorer", deriveBody());
+  const assessed = TIMELINE_PRESETS.filter((entry) => !isNotAssessable(entry.id));
   assert.equal(status, 200);
-  assert.equal(body.rows.length, 111);
+  assert.equal(body.rows.length, assessed.length);
+  assert.ok(!body.rows.some((row) => isNotAssessable(row.id)), "no row the evaluation does not assess");
   assert.equal(body.milestones.length, 14);
 });
 
@@ -102,11 +105,11 @@ test("8.4 previews and stores in minutes, the unit MOP 4.2.1 reports", async () 
   assert.deepEqual([row.store.threshold, row.store.objective, row.store.unit], [6480, 28080, "min"]);
 });
 
-test("Y/N presets store 1 for required and 0 for not required", async () => {
+test("Y/N presets store 1 for required, and uncovered rows store nothing", async () => {
   const { body } = await call(`${server.url}/criteria/benchmarks/derive-timeline`, "POST", "scorer", deriveBody());
-  const row = body.rows.find((entry) => entry.id === "3a.3");
-  assert.deepEqual([row.store.threshold, row.store.objective, row.store.unit], [0, 1, "Y/N"]);
-  assert.equal(body.rows.find((entry) => entry.id === "9.3").store, null);
+  const row = body.rows.find((entry) => entry.id === "7.5");
+  assert.deepEqual([row.store.threshold, row.store.objective, row.store.unit], [1, 1, "Y/N"]);
+  assert.equal(body.rows.find((entry) => entry.id === "10.1").store, null);
 });
 
 test("phase budgets that miss the timeline are rejected with the reason", async () => {

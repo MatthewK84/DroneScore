@@ -7,6 +7,7 @@ import { BenchmarksPanel } from "./BenchmarksPanel.jsx";
 import { TestMatrixPanel } from "./TestMatrixPanel.jsx";
 import { C4ScorecardPanel } from "./C4ScorecardPanel.jsx";
 import { FinalReportCard } from "./FinalReportCard.jsx";
+import { NotAssessablePanel } from "./NotAssessablePanel.jsx";
 
 /**
  * Criteria tab, laid out as the consolidated C4 criteria document.
@@ -26,6 +27,7 @@ import { FinalReportCard } from "./FinalReportCard.jsx";
 
 const VIEWS = Object.freeze([
   { key: "scorecard", label: "Scorecard" },
+  { key: "not-assessable", label: "Not Repeatably Assessable" },
   { key: "profile", label: "System Profile" },
   { key: "benchmarks", label: "Benchmarks" },
   { key: "matrix", label: "Test Matrix" },
@@ -90,6 +92,9 @@ function CriteriaView({ view, catalog, interceptors, isAdmin, onReload }) {
   }
   if (view === "final") {
     return <FinalReportCard />;
+  }
+  if (view === "not-assessable") {
+    return <NotAssessablePanel groups={catalog.notAssessable} />;
   }
   return <C4ScorecardPanel isAdmin={isAdmin} interceptors={interceptors} />;
 }
