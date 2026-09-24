@@ -171,9 +171,13 @@ test("each check says whether the claim came from the vendor sheet", () => {
 // Through the scoring path
 // ---------------------------------------------------------------------------
 
-/** @returns {object} One system's criteria package, built as the day review builds it. */
+/**
+ * @returns {object} One system scored against the full catalog. These tests
+ *   exercise the scoring engine, so they read every row, including rows the
+ *   evaluation does not currently assess.
+ */
 async function packageFor(profile, sources, benchmarkRows) {
-  const { assembleSystems } = await import("../server/systems.js");
+  const { scoreSystem } = await import("../server/systems.js");
   const rows = ROWS.map((row) => ({
     ...row,
     interceptor_id: 1,
@@ -182,7 +186,7 @@ async function packageFor(profile, sources, benchmarkRows) {
     interceptor_profile_sources: sources,
     uas_group: "1",
   }));
-  return assembleSystems({}, rows, benchmarkRows)[0];
+  return scoreSystem({ interceptorId: 1, name: "Guardian-1", rows }, {}, benchmarkRows);
 }
 
 /** @returns {object} A benchmark row as stored. */

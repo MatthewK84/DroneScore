@@ -20,10 +20,11 @@
  */
 
 import { computeDayStats } from "./analytics.js";
-import { buildScorecard } from "./c4-score.js";
+import { assessedScorecard, buildScorecard } from "./c4-score.js";
 import { buildCompliance, primaryGroup, primarySystem, resolveBenchmarks, summarizeCompliance } from "./compliance.js";
 import { deriveMops, deriveTimeline } from "./criteria.js";
 import { crossCheck, deriveFromDeclarations } from "./derivations.js";
+import { assessedMops, assessedOnly } from "./not-assessable.js";
 
 /**
  * Closeout counters that accumulate across days. A rate built from them
@@ -109,14 +110,17 @@ export function partitionBySystem(rows) {
 }
 
 /**
- * Builds the full criteria package for one system.
+ * Scores one system against the full catalog: every MOP, every compliance
+ * record, and every scorecard row, including rows the evaluation does not
+ * assess. Nothing reads this directly except assembleSystem and the tests
+ * that exercise the scoring engine itself.
  *
  * @param {{ interceptorId: number | null, name: string | null, rows: object[] }} group
  * @param {object} day Day row, or combined closeout counters across days.
  * @param {object[]} benchmarkRows Every stored benchmark.
  * @returns {object} MOPs, compliance, scorecard, and timeline for the system.
  */
-export function assembleSystem(group, day, benchmarkRows) {
+export function scoreSystem(group, day, benchmarkRows) {
   const profile = group.rows.find((row) => row.interceptor_profile)?.interceptor_profile || {};
   const sources = group.rows.find((row) => row.interceptor_profile_sources)?.interceptor_profile_sources || {};
   const redAir = group.rows.filter(isRedAir);
@@ -138,6 +142,30 @@ export function assembleSystem(group, day, benchmarkRows) {
     derivations: [...engine.values.entries()].map(([id, entry]) => ({ id, ...entry })),
     speedAdvantage: engine.speed,
     crossChecks: crossCheck(profile, sources, group.rows, mops),
+  };
+}
+
+/**
+ * Builds the published criteria package for one system: the full scoring
+ * of scoreSystem, with every row the evaluation does not assess left out
+ * of the MOPs, the compliance table, and the scorecard. Every screen and
+ * report reads this package, so the list in not-assessable.js applies
+ * everywhere at once.
+ *
+ * @param {{ interceptorId: number | null, name: string | null, rows: object[] }} group
+ * @param {object} day Day row, or combined closeout counters across days.
+ * @param {object[]} benchmarkRows Every stored benchmark.
+ * @returns {object} The package, restricted to assessed rows.
+ */
+export function assembleSystem(group, day, benchmarkRows) {
+  const full = scoreSystem(group, day, benchmarkRows);
+  const compliance = assessedOnly(full.compliance);
+  return {
+    ...full,
+    mops: assessedMops(full.mops),
+    compliance,
+    summary: summarizeCompliance(compliance),
+    scorecard: assessedScorecard(full.scorecard),
   };
 }
 
