@@ -11,6 +11,7 @@ import { createCriteriaRouter } from "./routes/criteria.js";
 import { createOperationsRouter } from "./routes/operations.js";
 import { createPublicRouter } from "./routes/public.js";
 import { createReadonlyRouter } from "./routes/readonly.js";
+import { createReportsRouter } from "./routes/reports.js";
 import { createSupportRouter } from "./routes/support.js";
 import { createVendorRouter, SHEET_BODY_LIMIT } from "./routes/vendor.js";
 
@@ -67,6 +68,7 @@ function buildApp(pool, mailer) {
   app.use("/api", createCriteriaRouter(pool, config));
   app.use("/api", createBenchmarkPresetsRouter(pool, config));
   app.use("/api", createOperationsRouter(pool, config, mailer));
+  app.use("/api", createReportsRouter(pool, config));
   app.use("/api", createSupportRouter(pool));
   app.use("/api", createVendorRouter(pool));
   app.use("/api", (_req, res) => {

@@ -149,6 +149,19 @@ export function openWor(id) {
   window.open(`/api/days/${id}/wor.pdf`, "_blank", "noopener");
 }
 
+/**
+ * Opens the final evaluation report for every closed day in a range.
+ * Blank bounds leave that end of the range open.
+ * @param {string} from YYYY-MM-DD, or "".
+ * @param {string} to YYYY-MM-DD, or "".
+ * @returns {void}
+ */
+export function openFinalReport(from, to) {
+  const pairs = [["from", from], ["to", to]].filter(([, value]) => value);
+  const query = pairs.map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join("&");
+  window.open(`/api/reports/final.pdf${query ? `?${query}` : ""}`, "_blank", "noopener");
+}
+
 /** @returns {Promise<{ location: string, weather: object|null, assessments: object[] }>} */
 export function getConditions() {
   return request("GET", "/public/conditions");

@@ -19,6 +19,35 @@ const INK = "#1A2018";
 /** What every row, area, or overall score without a score reads as. */
 export const NOT_ASSESSED = "Not Assessed";
 
+/**
+ * Phrases that name the period a report covers. A criteria package with no
+ * `period` is a daily WOR, and reads exactly as it always has.
+ */
+export const DAY_PERIOD = Object.freeze({
+  when: "on this date",
+  runs: "the day's intercept runs",
+  shared:
+    "Every system shares the day's range space, so the day closeout counters (false alarms, " +
+    "operating time, system aborts, repair time, crew, and setup time) apply to each of them.",
+  runLog: "the run log",
+});
+
+/** Phrases for the final report, which spans every day in its period. */
+export const EVENT_PERIOD = Object.freeze({
+  when: "across the evaluation period",
+  runs: "every intercept run in the evaluation period",
+  shared:
+    "Each system is scored with the closeout counters of the days it flew. False alarms, " +
+    "operating time, system aborts, and repair time sum over days with a complete closeout. " +
+    "Crew and setup time come from the latest day that recorded them.",
+  runLog: "the daily run logs",
+});
+
+/** @returns {object} The period phrases for a criteria package. */
+function periodOf(criteria) {
+  return criteria?.period || DAY_PERIOD;
+}
+
 const STATUS_LABELS = Object.freeze({
   objective: "Objective",
   threshold: "Threshold",
@@ -222,7 +251,7 @@ function buildComplianceSection(criteria) {
         `Compliance is reported for ${system.name || "the system under test"}, from its own runs only.` +
         ` Achieved Objective on ${summary.objective}, met Threshold on ${summary.threshold}, ` +
         `fell short on ${summary.short}. ${summary.not_established} KPPs are Not Assessed because no ` +
-        `benchmark is stored, and ${summary.not_measured} are Not Assessed because nothing measured them on this date. ` +
+        `benchmark is stored, and ${summary.not_measured} are Not Assessed because nothing measured them ${periodOf(criteria).when}. ` +
         (summary.claimed > 0
           ? `${summary.claimed} are performance claims from the vendor's data sheet, shown but not scored until demonstrated. `
           : "") +
@@ -306,7 +335,7 @@ export function buildMatrixSection(criteria) {
     {
       text:
         `${matrix.complete} of ${matrix.total} matrix profiles reached their required data ` +
-        `points on this date. ${matrix.unassigned} logged runs were not assigned to a profile ` +
+        `points ${periodOf(criteria).when}. ${matrix.unassigned} logged runs were not assigned to a profile ` +
         "and are excluded from coverage; unassigned runs are not distributed across profiles, " +
         "because doing so would credit coverage that was never demonstrated.",
       fontSize: 8,
@@ -429,7 +458,7 @@ function areaTable(section) {
 }
 
 /** @returns {object[]} The paragraph stating the Overall System Score. */
-function scorecardSummary(scorecard) {
+function scorecardSummary(scorecard, period) {
   const overall = scorecard.overall === null ? NOT_ASSESSED : `${scorecard.overall.toFixed(2)} of 2`;
   return [
     {
@@ -437,7 +466,7 @@ function scorecardSummary(scorecard) {
         `Overall System Score ${overall}, the weighted average of the five Core Capability ` +
         `Areas at equal weight. ${scorecard.states.scored} of ${scorecard.total} rows carry ` +
         `a score. Of the rest: ${scorecard.states.no_benchmark} Not Assessed with no Threshold or ` +
-        `Objective stored, ${scorecard.states.not_measured} Not Assessed with no measurement on this date, ` +
+        `Objective stored, ${scorecard.states.not_measured} Not Assessed with no measurement ${period.when}, ` +
         `${scorecard.states.reported} reported as specifications the criteria do not score, ` +
         `${scorecard.states.claimed} vendor performance claims not yet demonstrated, ` +
         `${scorecard.states.not_applicable} marked not applicable to this configuration. ` +
@@ -450,13 +479,13 @@ function scorecardSummary(scorecard) {
 }
 
 /** @returns {object[]} The militarily effective verdict, stated either way. */
-function effectivenessVerdict(scorecard) {
+function effectivenessVerdict(scorecard, period) {
   if (!scorecard.notMilitarilyEffective) {
     return [
       {
         text:
           "No Critical KPP scored 0, so the criteria do not flag this system Not " +
-          "Militarily Effective on this date. Criticality is declared by the evaluator " +
+          `Militarily Effective ${period.when}. Criticality is declared by the evaluator ` +
           "on the benchmark record; a KPP never marked Critical cannot raise this flag.",
         fontSize: 8,
         margin: [0, 0, 0, 8],
@@ -483,7 +512,8 @@ function buildScorecardSection(criteria) {
   if (!scorecard) {
     return [{ text: "Scorecard data was unavailable.", italics: true }];
   }
-  const blocks = [...scorecardSummary(scorecard), ...effectivenessVerdict(scorecard)];
+  const period = periodOf(criteria);
+  const blocks = [...scorecardSummary(scorecard, period), ...effectivenessVerdict(scorecard, period)];
   for (const area of scorecard.areas) {
     const score = area.score === null ? NOT_ASSESSED : `${area.score.toFixed(2)} of 2`;
     blocks.push({
@@ -522,7 +552,7 @@ function buildTimelineSection(criteria) {
   return [
     {
       text:
-        "Mean seconds per phase across the day's intercept runs, split by the scenario " +
+        `Mean seconds per phase across ${periodOf(criteria).runs}, split by the scenario ` +
         `each run was flown under. The total covers ${total.coveredPhases.mlcoa} of ` +
         `${total.phaseCount} phases under MLCOA and ${total.coveredPhases.mdcoa} of ` +
         `${total.phaseCount} under MDCOA. A phase with no captured timing is left blank ` +
@@ -559,10 +589,10 @@ function systemStats(stats, name) {
 }
 
 /** @returns {object[]} The note shown when no run named an interceptor. */
-function noSystems() {
+function noSystems(period) {
   return [
     {
-      text: "No runs were logged against an interceptor on this date, so no system can be characterized.",
+      text: `No runs were logged against an interceptor ${period.when}, so no system can be characterized.`,
       italics: true,
     },
   ];
@@ -588,23 +618,21 @@ function comparisonRow(pkg, stats) {
   ];
 }
 
-/** @returns {string} How the day's runs and closeout apply to each system. */
+/** @returns {string} How the period's runs and closeout apply to each system. */
 function attributionNote(criteria) {
+  const period = periodOf(criteria);
   const parts = [
     `${criteria.systems.length} ${criteria.systems.length === 1 ? "system was" : "systems were"} ` +
-      "flown on this date. Each is characterized from its own runs only; no figure below " +
+      `flown ${period.when}. Each is characterized from its own runs only; no figure below ` +
       "mixes runs from two systems.",
   ];
   if (criteria.systems.length > 1) {
-    parts.push(
-      "Every system shares the day's range space, so the day closeout counters (false alarms, " +
-        "operating time, system aborts, repair time, crew, and setup time) apply to each of them."
-    );
+    parts.push(period.shared);
   }
   if (criteria.unassignedRuns > 0) {
     parts.push(
       `${criteria.unassignedRuns} ${criteria.unassignedRuns === 1 ? "run names" : "runs name"} no interceptor ` +
-        "and cannot be attributed to any system, so they appear in the run log and section 5 but in no system's characterization."
+        `and cannot be attributed to any system, so they appear in ${period.runLog} and section 5 but in no system's characterization.`
     );
   }
   return parts.join(" ");
@@ -614,7 +642,7 @@ function attributionNote(criteria) {
 export function buildSystemComparisonSection(criteria, stats) {
   const systems = criteria?.systems || [];
   if (systems.length === 0) {
-    return noSystems();
+    return noSystems(periodOf(criteria));
   }
   return [
     { text: attributionNote(criteria), fontSize: 8, margin: [0, 0, 0, 8] },
@@ -770,7 +798,7 @@ function buildDeclarationSection(pkg) {
 export function buildSystemSections(criteria, stats) {
   const systems = criteria?.systems || [];
   if (systems.length === 0) {
-    return noSystems();
+    return noSystems(periodOf(criteria));
   }
   return [mopIntro(), ...systems.flatMap((pkg, index) => systemBlocks(pkg, index, stats))];
 }

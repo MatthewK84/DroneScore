@@ -6,6 +6,7 @@ import { SystemProfilePanel } from "./SystemProfilePanel.jsx";
 import { BenchmarksPanel } from "./BenchmarksPanel.jsx";
 import { TestMatrixPanel } from "./TestMatrixPanel.jsx";
 import { C4ScorecardPanel } from "./C4ScorecardPanel.jsx";
+import { FinalReportCard } from "./FinalReportCard.jsx";
 
 /**
  * Criteria tab, laid out as the consolidated C4 criteria document.
@@ -28,6 +29,7 @@ const VIEWS = Object.freeze([
   { key: "profile", label: "System Profile" },
   { key: "benchmarks", label: "Benchmarks" },
   { key: "matrix", label: "Test Matrix" },
+  { key: "final", label: "Final Report" },
 ]);
 
 /** @param {{ isAdmin: boolean }} props */
@@ -85,6 +87,9 @@ function CriteriaView({ view, catalog, interceptors, isAdmin, onReload }) {
   }
   if (view === "matrix") {
     return <TestMatrixPanel isAdmin={isAdmin} />;
+  }
+  if (view === "final") {
+    return <FinalReportCard />;
   }
   return <C4ScorecardPanel isAdmin={isAdmin} interceptors={interceptors} />;
 }

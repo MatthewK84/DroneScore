@@ -255,11 +255,26 @@ async function closeDayAtomic(pool, config, dayId) {
  */
 async function loadCriteriaPackage(client, day, rows, config) {
   const benchmarks = await client.query("SELECT * FROM benchmarks");
+  const matrixProfiles = await loadMatrixProfiles(client);
+  return {
+    ...assembleReview(day, rows, benchmarks.rows, config),
+    matrix: buildMatrixCoverage(matrixProfiles, rows),
+  };
+}
+
+/**
+ * Loads every test matrix profile with its target lines, shaped for
+ * buildMatrixCoverage.
+ *
+ * @param {import("pg").PoolClient | import("pg").Pool} client
+ * @returns {Promise<object[]>}
+ */
+export async function loadMatrixProfiles(client) {
   const profiles = await client.query("SELECT * FROM test_profiles ORDER BY code ASC");
   const targets = await client.query(
     "SELECT * FROM test_profile_targets ORDER BY profile_id, sequence"
   );
-  const matrixProfiles = profiles.rows.map((profile) => ({
+  return profiles.rows.map((profile) => ({
     id: Number(profile.id),
     code: profile.code,
     mission: profile.mission,
@@ -275,10 +290,6 @@ async function loadCriteriaPackage(client, day, rows, config) {
         launchPoint: target.launch_point,
       })),
   }));
-  return {
-    ...assembleReview(day, rows, benchmarks.rows, config),
-    matrix: buildMatrixCoverage(matrixProfiles, rows),
-  };
 }
 
 /** Normalizes day_date to a plain YYYY-MM-DD string for the WOR builder. */
