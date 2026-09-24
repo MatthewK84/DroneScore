@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ApiError, deriveBenchmarkDefaults, listBenchmarks, saveBenchmark } from "../api.js";
+import { ApiError, listBenchmarks, saveBenchmark } from "../api.js";
 import { C, MONO, st } from "../styles.js";
 import { TimelinePresetsPanel } from "./TimelinePresetsPanel.jsx";
 import { Loading, Notice } from "./ui.jsx";
@@ -11,25 +11,10 @@ import { Loading, Notice } from "./ui.jsx";
  * execution, and requires the final assessment to state whether the system
  * met the Threshold, fell short, or achieved the Objective.
  *
- * The derivation helper computes the range benchmarks that public UAS group
- * kinematics actually support, and shows the arithmetic for each one. It
- * refuses to produce probability of kill or simultaneous target counts,
- * because no public authoritative source establishes them and a fabricated
- * figure inside a formal evaluation is worse than an empty field.
+ * Presets come from the C4 ETA timeline budget. The group-ceiling
+ * derivation is no longer offered here: every row it derives is on the Not
+ * Repeatably Assessable list. Its server route and tests remain.
  */
-
-const EMPTY_INPUTS = Object.freeze({
-  uasGroup: "1",
-  standoffM: "500",
-  cycleS: "30",
-  launchToDefeatS: "10",
-});
-
-/** The two ways to derive presets. The group-ceiling card is unchanged. */
-const MODES = Object.freeze([
-  { key: "ceiling", label: "Group ceiling" },
-  { key: "timeline", label: "Timeline budget (C4 ETA)" },
-]);
 
 /** A blank manual benchmark entry. */
 const EMPTY_MANUAL = Object.freeze({
@@ -86,13 +71,9 @@ function scopeLabel(benchmark, interceptors) {
 /** @param {{ catalog: object, interceptors: object[], isAdmin: boolean }} props */
 export function BenchmarksPanel({ catalog, interceptors, isAdmin }) {
   const [benchmarks, setBenchmarks] = useState([]);
-  const [inputs, setInputs] = useState(EMPTY_INPUTS);
-  const [derived, setDerived] = useState([]);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [mode, setMode] = useState("ceiling");
 
   const reload = useCallback(async () => {
     try {
@@ -110,54 +91,6 @@ export function BenchmarksPanel({ catalog, interceptors, isAdmin }) {
     reload();
   }, [reload]);
 
-  const setInput = useCallback((key, value) => {
-    setInputs((prev) => ({ ...prev, [key]: value }));
-  }, []);
-
-  const derive = useCallback(async () => {
-    setError("");
-    setStatus("");
-    try {
-      const data = await deriveBenchmarkDefaults({
-        uasGroup: inputs.uasGroup,
-        standoffM: Number(inputs.standoffM),
-        cycleS: Number(inputs.cycleS),
-        launchToDefeatS: Number(inputs.launchToDefeatS),
-      });
-      setDerived(data.derived);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to derive benchmarks.");
-    }
-  }, [inputs]);
-
-  const accept = useCallback(
-    async (entry) => {
-      if (busy) {
-        return;
-      }
-      setBusy(true);
-      setError("");
-      try {
-        await saveBenchmark({
-          kppId: entry.kppId,
-          interceptorId: null,
-          uasGroup: inputs.uasGroup,
-          threshold: entry.threshold,
-          objective: entry.objective,
-          unit: entry.unit,
-          basis: entry.basis,
-        });
-        setStatus(`Stored KPP ${entry.kppId} for Group ${inputs.uasGroup}.`);
-        await reload();
-      } catch (err) {
-        setError(err instanceof ApiError ? err.message : "Failed to store the benchmark.");
-      } finally {
-        setBusy(false);
-      }
-    },
-    [busy, inputs.uasGroup, reload]
-  );
-
   if (loading) {
     return <Loading label="Loading benchmarks..." />;
   }
@@ -166,149 +99,21 @@ export function BenchmarksPanel({ catalog, interceptors, isAdmin }) {
     <div>
       <Notice tone="warn">
         Section 4.2 requires Threshold and Objective values to be documented before test
-        execution. Any KPP left without one prints as Not Assessed on the report, which
+        execution. Any assessed KPP left without one prints as Not Assessed on the report, which
         is an open action against the evaluation rather than a pass.
       </Notice>
 
-      <ModeSwitch mode={mode} onMode={setMode} />
+      <TimelinePresetsPanel interceptors={interceptors} benchmarks={benchmarks} isAdmin={isAdmin} onWritten={reload} />
 
-      {mode === "timeline" ? (
-        <TimelinePresetsPanel interceptors={interceptors} benchmarks={benchmarks} isAdmin={isAdmin} onWritten={reload} />
-      ) : null}
+      {isAdmin ? <ManualCard catalog={catalog} onSaved={reload} onError={setError} onStatus={setStatus} /> : null}
 
-      {mode === "ceiling" && isAdmin ? (
-        <DerivationCard
-          inputs={inputs}
-          groups={catalog.groups}
-          onChange={setInput}
-          onDerive={derive}
-        />
-      ) : null}
-
-      {mode === "ceiling" && derived.length > 0 ? (
-        <DerivedList entries={derived} onAccept={accept} busy={busy} isAdmin={isAdmin} />
-      ) : null}
-
-      {isAdmin ? <ManualCard catalog={catalog} busy={busy} onSaved={reload} onError={setError} onStatus={setStatus} /> : null}
-
-      <StoredList benchmarks={benchmarks} interceptors={interceptors} />
+      <StoredList benchmarks={benchmarks} interceptors={interceptors} notAssessableIds={catalog.notAssessableIds || []} />
 
       {error ? <p style={st.error}>{error}</p> : null}
       {status ? <Notice tone="info">{status}</Notice> : null}
     </div>
   );
 }
-
-/** Chooses between the group-ceiling derivation and the timeline presets. */
-function ModeSwitch({ mode, onMode }) {
-  return (
-    <div style={{ display: "flex", gap: 8, marginBottom: 16 }} role="tablist">
-      {MODES.map((entry) => {
-        const active = entry.key === mode;
-        return (
-          <button
-            key={entry.key}
-            role="tab"
-            aria-selected={active}
-            onClick={() => onMode(entry.key)}
-            style={{
-              ...st.ghostBtn,
-              flex: 1,
-              borderColor: active ? C.olive : C.line,
-              color: active ? C.panel : C.ink,
-              background: active ? C.olive : C.panel,
-            }}
-          >
-            {entry.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/** The inputs that a range derivation needs, plus the published group bands. */
-function DerivationCard({ inputs, groups, onChange, onDerive }) {
-  const band = groups.find((entry) => entry.group === inputs.uasGroup);
-  return (
-    <div style={st.card}>
-      <h2 style={st.secHead}>Derive from UAS Group Kinematics</h2>
-      <p style={{ ...st.meta, marginBottom: 12 }}>
-        A target closing at a known ceiling speed covers a known distance in a known time.
-        That arithmetic gives the range benchmarks. Effectiveness and quantity benchmarks are
-        not derived here and must be entered with their own basis.
-      </p>
-      <label style={st.field}>
-        <span style={st.label}>Target UAS group</span>
-        <select style={st.input} value={inputs.uasGroup} onChange={(e) => onChange("uasGroup", e.target.value)}>
-          {groups.map((entry) => (
-            <option key={entry.group} value={entry.group}>
-              Group {entry.group}
-              {entry.maxSpeedKt === null ? " (no published ceiling)" : ` (to ${entry.maxSpeedKt} kt)`}
-            </option>
-          ))}
-        </select>
-      </label>
-      {band ? (
-        <p style={{ ...st.meta, marginTop: -6, marginBottom: 14 }}>
-          Published band: to {band.maxWeightLb === null ? "unbounded" : `${band.maxWeightLb} lb`},
-          {band.maxAltitudeFt === null ? " unbounded altitude" : ` ${band.maxAltitudeFt} ft ${band.altitudeRef}`},
-          {band.maxSpeedKt === null ? " unbounded speed" : ` ${band.maxSpeedKt} kt`}.
-        </p>
-      ) : null}
-      <div style={st.grid2}>
-        <label style={st.field}>
-          <span style={st.label}>Protected standoff (m)</span>
-          <input style={st.input} type="number" inputMode="decimal" value={inputs.standoffM} onChange={(e) => onChange("standoffM", e.target.value)} />
-        </label>
-        <label style={st.field}>
-          <span style={st.label}>Detect to defeat cycle (s)</span>
-          <input style={st.input} type="number" inputMode="decimal" value={inputs.cycleS} onChange={(e) => onChange("cycleS", e.target.value)} />
-        </label>
-      </div>
-      <label style={st.field}>
-        <span style={st.label}>Launch to defeat (s)</span>
-        <input style={st.input} type="number" inputMode="decimal" value={inputs.launchToDefeatS} onChange={(e) => onChange("launchToDefeatS", e.target.value)} />
-      </label>
-      <button style={{ ...st.priBtn, width: "100%" }} onClick={onDerive}>
-        Derive benchmarks
-      </button>
-    </div>
-  );
-}
-
-/** The derivation output, each row carrying the reasoning behind it. */
-function DerivedList({ entries, onAccept, busy, isAdmin }) {
-  const derivable = entries.filter((entry) => entry.derived);
-  const withheld = entries.filter((entry) => !entry.derived);
-  return (
-    <div style={st.card}>
-      <h2 style={st.secHead}>Derived ({derivable.length})</h2>
-      {derivable.map((entry) => (
-        <div key={entry.kppId} style={st.rowItem}>
-          <div style={{ flex: 1 }}>
-            <strong style={{ fontFamily: MONO, fontSize: 14 }}>KPP {entry.kppId}</strong>
-            <div style={{ fontFamily: MONO, fontSize: 13, color: C.olive, marginTop: 2 }}>
-              Threshold {entry.threshold} {entry.unit} / Objective {entry.objective} {entry.unit}
-            </div>
-            <div style={{ ...st.meta, marginTop: 4 }}>{entry.basis}</div>
-          </div>
-          {isAdmin ? (
-            <button style={{ ...st.ghostBtn, opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={() => onAccept(entry)}>
-              Accept
-            </button>
-          ) : null}
-        </div>
-      ))}
-      <h2 style={{ ...st.secHead, marginTop: 18 }}>Not Derived ({withheld.length})</h2>
-      <p style={{ ...st.meta, marginBottom: 10 }}>
-        {withheld.map((entry) => `KPP ${entry.kppId}`).join(", ")}
-      </p>
-      <p style={st.meta}>{withheld.length > 0 ? withheld[0].basis : ""}</p>
-    </div>
-  );
-}
-
 
 /**
  * Manual entry for the Threshold, Objective, and Critical mark on any
@@ -318,7 +123,7 @@ function DerivedList({ entries, onAccept, busy, isAdmin }) {
  * belongs to the evaluator, so it is made here, beside the limits, and is
  * never inferred from the measure's name.
  */
-function ManualCard({ catalog, busy, onSaved, onError, onStatus }) {
+function ManualCard({ catalog, onSaved, onError, onStatus }) {
   const [entry, setEntry] = useState(EMPTY_MANUAL);
   const [saving, setSaving] = useState(false);
   const options = useMemo(() => benchmarkableRows(catalog), [catalog]);
@@ -328,7 +133,7 @@ function ManualCard({ catalog, busy, onSaved, onError, onStatus }) {
   }, []);
 
   const submit = useCallback(async () => {
-    if (entry.rowId === "" || saving || busy) {
+    if (entry.rowId === "" || saving) {
       return;
     }
     setSaving(true);
@@ -352,7 +157,7 @@ function ManualCard({ catalog, busy, onSaved, onError, onStatus }) {
     } finally {
       setSaving(false);
     }
-  }, [entry, saving, busy, onSaved, onError, onStatus]);
+  }, [entry, saving, onSaved, onError, onStatus]);
 
   const selected = options.find((option) => option.id === entry.rowId) || null;
   return (
@@ -431,8 +236,12 @@ function ManualCard({ catalog, busy, onSaved, onError, onStatus }) {
   );
 }
 
-/** The benchmarks already stored against the evaluation. */
-function StoredList({ benchmarks, interceptors }) {
+/**
+ * The benchmarks already stored against the evaluation. A benchmark on a
+ * row that is not assessed stays stored, so moving the row back restores
+ * it, but it is tagged because nothing reads it now.
+ */
+function StoredList({ benchmarks, interceptors, notAssessableIds }) {
   if (benchmarks.length === 0) {
     return (
       <div style={st.card}>
@@ -451,6 +260,11 @@ function StoredList({ benchmarks, interceptors }) {
             {benchmark.critical ? (
               <span style={{ fontFamily: MONO, fontSize: 10, color: C.orange, marginLeft: 8, letterSpacing: "0.06em" }}>
                 CRITICAL
+              </span>
+            ) : null}
+            {notAssessableIds.includes(benchmark.kppId) ? (
+              <span style={{ fontFamily: MONO, fontSize: 10, color: C.inkMuted, marginLeft: 8, letterSpacing: "0.06em" }}>
+                NOT REPEATABLY ASSESSABLE, UNUSED
               </span>
             ) : null}
             <div style={{ ...st.meta, marginTop: 2 }}>{scopeLabel(benchmark, interceptors)}</div>

@@ -24,7 +24,7 @@ import { assessedScorecard, buildScorecard } from "./c4-score.js";
 import { buildCompliance, primaryGroup, primarySystem, resolveBenchmarks, summarizeCompliance } from "./compliance.js";
 import { deriveMops, deriveTimeline } from "./criteria.js";
 import { crossCheck, deriveFromDeclarations } from "./derivations.js";
-import { assessedMops, assessedOnly } from "./not-assessable.js";
+import { assessedMops, assessedOnly, isNotAssessable } from "./not-assessable.js";
 
 /**
  * Closeout counters that accumulate across days. A rate built from them
@@ -166,6 +166,7 @@ export function assembleSystem(group, day, benchmarkRows) {
     compliance,
     summary: summarizeCompliance(compliance),
     scorecard: assessedScorecard(full.scorecard),
+    timeline: isNotAssessable("timeline") ? null : full.timeline,
   };
 }
 

@@ -146,7 +146,12 @@ export function SystemProfilePanel({ catalog, interceptors, isAdmin, onChanged }
         disabled={!isAdmin}
       />
 
-      <NarrativeCard profile={profile} onAnswer={setAnswer} disabled={!isAdmin} />
+      <NarrativeCard
+        profile={profile}
+        onAnswer={setAnswer}
+        disabled={!isAdmin}
+        hiddenIds={catalog.notAssessableIds || []}
+      />
 
       {error ? <p style={st.error}>{error}</p> : null}
       {status ? <Notice tone="info">{status}</Notice> : null}
@@ -306,8 +311,15 @@ function Choice({ options, value, onChange, disabled }) {
   );
 }
 
-/** The narrative answers behind the qualitative MOPs of Criteria 4 and 5. */
-function NarrativeCard({ profile, onAnswer, disabled }) {
+/**
+ * The narrative answers behind the qualitative MOPs of Criteria 4 and 5,
+ * less any the evaluation does not assess.
+ */
+function NarrativeCard({ profile, onAnswer, disabled, hiddenIds }) {
+  const shown = NARRATIVE_MOPS.filter((item) => !hiddenIds.includes(item.key.slice("mop.".length)));
+  if (shown.length === 0) {
+    return null;
+  }
   return (
     <div style={st.card}>
       <h2 style={st.secHead}>Criteria 4 and 5 Narrative</h2>
@@ -316,7 +328,7 @@ function NarrativeCard({ profile, onAnswer, disabled }) {
         report; the verdict beside it is what the scorecard scores, and leaving it
         unanswered reports the row as Not Assessed rather than as a pass.
       </p>
-      {NARRATIVE_MOPS.map((item) => (
+      {shown.map((item) => (
         <NarrativeField key={item.key} item={item} profile={profile} onAnswer={onAnswer} disabled={disabled} />
       ))}
     </div>
