@@ -262,6 +262,7 @@ function compare(spec, declared, mopsById, source) {
     demonstrated: shown.value,
     n: shown.n,
     source,
+    evidence: spec.mop,
   };
   if (shown.value === null) {
     return { ...base, status: "untested", note: "No run has produced this measure yet." };
@@ -294,7 +295,7 @@ function speedConsistency(profile, rows, source) {
       return range !== null && time !== null && time > 0 ? range / time : null;
     })
     .filter((value) => value !== null);
-  const base = { id: "INT-1", label: "INT-1", measure: "Interceptor max speed", unit: "m/s", declared, n: implied.length, source };
+  const base = { id: "INT-1", label: "INT-1", measure: "Interceptor max speed", unit: "m/s", declared, n: implied.length, source, evidence: "3.1.3" };
   if (implied.length === 0) {
     return { ...base, demonstrated: null, status: "untested", note: "Needs defeat runs with both engagement range and time to intercept logged." };
   }

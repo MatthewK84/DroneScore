@@ -224,6 +224,16 @@ const SCORECARD_ROWS = new Map(
   ])
 );
 
+/**
+ * @param {string} id A catalog, scorecard, or listed row id.
+ * @returns {string} The row as it prints, such as "INT-3 Intercept Envelope".
+ */
+export function rowName(id) {
+  const listed = NOT_ASSESSABLE.find((row) => row.id === id) || { id };
+  const { label, measure } = describe(listed);
+  return measure ? `${label} ${measure}` : label;
+}
+
 /** @returns {{ label: string, measure: string }} How a row prints. */
 function describe(row) {
   if (row.label && row.measure) {

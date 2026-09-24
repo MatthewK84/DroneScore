@@ -11,10 +11,14 @@
  * catalog appears on the next sheet with no change here; the only lists
  * in this file are the measures deliberately left off, each with its
  * reason, and the wording that closes the traps real spec sheets set.
+ * Measures on the Not Repeatably Assessable list in not-assessable.js are
+ * left off too. The field names never change, so a sheet issued before a
+ * measure left the list still imports: its extra boxes are ignored.
  */
 
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { catalogByCategory, isPerformanceClaim } from "./kpp-catalog.js";
+import { isNotAssessable, rowName } from "./not-assessable.js";
 import { convert, parseNumber, roundStored, unitSpecFor, unitsOf } from "./units.js";
 
 /** Identifies a completed sheet as ours, and which layout it follows. */
@@ -48,16 +52,42 @@ const FIELD_NOTES = Object.freeze({
 
 /**
  * Airframe figures the derivation engine needs that are not criteria in
- * their own right. Each one is phrased against the misreading it prevents.
+ * their own right. Each one is phrased against the misreading it prevents,
+ * and `feeds` names the rows it is used for.
  */
-export const AIRFRAME_INPUTS = Object.freeze([
-  { key: "in.cruise_speed", measure: "Cruise speed", dimension: "speed", unit: "m/s", description: "Speed the interceptor sustains in transit to an engagement." },
-  { key: "in.flight_time_loaded", measure: "Flight time with mission payload", dimension: "time", unit: "min", description: "Endurance carrying the payload it engages with. This, not unloaded endurance, bounds an intercept." },
-  { key: "in.flight_time_unloaded", measure: "Flight time without payload", dimension: "time", unit: "min", description: "Endurance with no payload. Reported for reference only." },
-  { key: "in.working_range", measure: "Working engagement range", dimension: "distance", unit: "km", description: "Furthest distance from launch at which the interceptor can engage a target." },
-  { key: "in.max_altitude", measure: "Maximum interceptor altitude", dimension: "distance", unit: "m", description: "Highest altitude above ground level the interceptor itself can reach." },
-  { key: "in.interceptor_weight", measure: "Interceptor weight, flight-ready", dimension: "mass", unit: "kg", description: "One interceptor with battery and payload. The whole system's weight goes under KPP 9.2." },
+const AIRFRAME_BASE = Object.freeze([
+  { key: "in.cruise_speed", measure: "Cruise speed", dimension: "speed", unit: "m/s", feeds: ["INT-3"], description: "Speed the interceptor sustains in transit to an engagement." },
+  { key: "in.flight_time_loaded", measure: "Flight time with mission payload", dimension: "time", unit: "min", feeds: ["9.1", "INT-3"], description: "Endurance carrying the payload it engages with. This, not unloaded endurance, bounds an intercept." },
+  { key: "in.flight_time_unloaded", measure: "Flight time without payload", dimension: "time", unit: "min", feeds: ["9.1"], description: "Endurance with no payload. Reported for reference only." },
+  { key: "in.working_range", measure: "Working engagement range", dimension: "distance", unit: "km", feeds: ["INT-3", "3.1.3"], description: "Furthest distance from launch at which the interceptor can engage a target." },
+  { key: "in.max_altitude", measure: "Maximum interceptor altitude", dimension: "distance", unit: "m", feeds: ["INT-3"], description: "Highest altitude above ground level the interceptor itself can reach." },
+  { key: "in.interceptor_weight", measure: "Interceptor weight, flight-ready", dimension: "mass", unit: "kg", feeds: ["9.2"], description: "One interceptor with battery and payload. The whole system's weight goes under KPP 9.2." },
 ]);
+
+/** @returns {string} A list of names joined with commas and a final "and". */
+function joinNames(names) {
+  return names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+/**
+ * @param {{ feeds: string[] }} input One airframe input.
+ * @returns {string} A note naming the rows it feeds that the evaluation
+ *   does not assess, or "" when it feeds none.
+ */
+export function airframeNote(input) {
+  const unassessed = input.feeds.filter((id) => isNotAssessable(id));
+  if (unassessed.length === 0) {
+    return "";
+  }
+  const names = joinNames(unassessed.map(rowName));
+  const lead = unassessed.length === input.feeds.length ? "Reference only. It feeds" : "It also feeds";
+  return `${lead} ${names}, which this evaluation does not assess.`;
+}
+
+/** Every airframe input, each carrying its not-assessed note. */
+export const AIRFRAME_INPUTS = Object.freeze(
+  AIRFRAME_BASE.map((input) => Object.freeze({ ...input, note: airframeNote(input) }))
+);
 
 /** Keys of every airframe input, for the profile's key validation. */
 export const AIRFRAME_INPUT_KEYS = Object.freeze(AIRFRAME_INPUTS.map((input) => input.key));
@@ -85,7 +115,8 @@ function onSheet(entry) {
     !EVALUATOR_CATEGORIES.includes(entry.category) &&
     !DERIVED_IDS.includes(entry.id) &&
     !NON_KINETIC_IDS.includes(entry.id) &&
-    !EVALUATOR_IDS.includes(entry.id)
+    !EVALUATOR_IDS.includes(entry.id) &&
+    !isNotAssessable(entry.id)
   );
 }
 
@@ -124,7 +155,7 @@ function airframeField(input) {
     label: "Airframe",
     measure: input.measure,
     description: input.description,
-    note: "",
+    note: input.note,
     input: "number",
     dimension: input.dimension,
     unit: input.unit,
@@ -229,12 +260,19 @@ function drawLines(cursor, lines, { x, size, font, color, leading }) {
   return offset;
 }
 
+/** Said only when the sheet carries a performance claim to mark. */
+const CLAIM_INSTRUCTION = TEMPLATE_FIELDS.some((field) => field.claim)
+  ? "Measures marked PERFORMANCE CLAIM are shown beside test results and never scored from this sheet. "
+  : "";
+
 const INSTRUCTIONS =
   "Enter one value per box, and choose its unit from the list beside it. Leave a box empty " +
   "when the system lacks the capability or the value is not known: do not estimate. A range " +
   "such as 290-340 is refused on import; enter the value the system is guaranteed to meet. " +
-  "Measures marked PERFORMANCE CLAIM are shown beside test results and never scored from this " +
-  "sheet. Save the completed form as a fillable PDF. Printing to PDF or flattening the form " +
+  "This sheet asks only for measures the evaluation assesses. Airframe figures marked Reference " +
+  "only feed measures it does not assess. " +
+  CLAIM_INSTRUCTION +
+  "Save the completed form as a fillable PDF. Printing to PDF or flattening the form " +
   "removes the boxes, and a sheet without its boxes cannot be imported.";
 
 /** Draws the title block, instructions, and the identifying fields. */
@@ -264,7 +302,8 @@ function drawHeader(cursor, fonts, form) {
 
 /** Draws a section heading bar. */
 function drawSectionHeading(cursor, fonts, title) {
-  ensureSpace(cursor, 60);
+  // Room for the heading and its first field, so a heading never ends a page alone.
+  ensureSpace(cursor, 90);
   cursor.page.drawRectangle({ x: PAGE.margin, y: cursor.y - 20, width: PAGE.width - PAGE.margin * 2, height: 20, color: FILL });
   cursor.page.drawText(title.toUpperCase(), { x: PAGE.margin + 8, y: cursor.y - 14, size: 9.5, font: fonts.bold, color: OLIVE });
   cursor.y -= 28;

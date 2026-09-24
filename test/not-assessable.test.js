@@ -113,3 +113,28 @@ test("the report section lists every row with its reason", () => {
   }
   assert.match(text, new RegExp(`these ${NOT_ASSESSABLE.length} criteria`));
 });
+
+test("vendor declarations show only claims and derivations the evaluation assesses", () => {
+  const declared = {
+    ...group(),
+    rows: group().rows.map((row) => ({
+      ...row,
+      engagement_range_m: 900,
+      interceptor_profile: {
+        "INT-1": "80",
+        "1.1": "3",
+        "INT-5": "92",
+        "in.working_range": "15",
+        "in.flight_time_loaded": "9",
+        "in.flight_time_unloaded": "28",
+        "9.6": "8200",
+      },
+    })),
+  };
+  const full = scoreSystem(declared, {}, []);
+  const pkg = assembleSystem(declared, {}, []);
+  assert.ok(full.crossChecks.length > 0 && full.speedAdvantage.length > 0, "the engine still checks every claim");
+  assert.deepEqual(pkg.crossChecks, [], "every check rests on a row that is not assessed");
+  assert.deepEqual(pkg.speedAdvantage, []);
+  assert.deepEqual(pkg.derivations.map((entry) => entry.id), ["9.1"]);
+});

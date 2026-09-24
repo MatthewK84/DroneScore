@@ -179,8 +179,8 @@ function AirframeCard({ inputs, profile, sources, onAnswer, disabled }) {
     <div style={st.card}>
       <h2 style={st.secHead}>Interceptor Airframe</h2>
       <p style={{ ...st.meta, marginBottom: 12 }}>
-        Inputs to the derivation engine: battery life, the intercept envelope check, and the
-        speed and range cross-checks are computed from these.
+        Inputs to the derivation engine. Battery life is derived from the flight times. Figures
+        marked Reference only feed measures this evaluation does not assess.
       </p>
       {inputs.map((input) => (
         <div key={input.key} style={{ marginBottom: 16 }}>
@@ -189,6 +189,7 @@ function AirframeCard({ inputs, profile, sources, onAnswer, disabled }) {
             <SourceBadge vendor={sources[input.key]?.source === "vendor-sheet"} claim={false} />
           </span>
           <p style={{ ...st.meta, marginTop: 0, marginBottom: 6 }}>{input.description}</p>
+          {input.note ? <p style={{ ...st.meta, marginTop: 0, marginBottom: 6, color: C.noAttempt }}>{input.note}</p> : null}
           <input
             style={st.input}
             type="number"
