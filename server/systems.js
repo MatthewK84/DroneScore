@@ -146,11 +146,19 @@ export function scoreSystem(group, day, benchmarkRows) {
 }
 
 /**
+ * @returns {boolean} True when a declared claim and the run measure it is
+ *   checked against are both assessed.
+ */
+function isAssessedCheck(check) {
+  return !isNotAssessable(check.id) && !(check.evidence && isNotAssessable(check.evidence));
+}
+
+/**
  * Builds the published criteria package for one system: the full scoring
  * of scoreSystem, with every row the evaluation does not assess left out
- * of the MOPs, the compliance table, and the scorecard. Every screen and
- * report reads this package, so the list in not-assessable.js applies
- * everywhere at once.
+ * of the MOPs, the compliance table, the scorecard, and the vendor
+ * declarations and derivations. Every screen and report reads this
+ * package, so the list in not-assessable.js applies everywhere at once.
  *
  * @param {{ interceptorId: number | null, name: string | null, rows: object[] }} group
  * @param {object} day Day row, or combined closeout counters across days.
@@ -167,6 +175,9 @@ export function assembleSystem(group, day, benchmarkRows) {
     summary: summarizeCompliance(compliance),
     scorecard: assessedScorecard(full.scorecard),
     timeline: isNotAssessable("timeline") ? null : full.timeline,
+    derivations: assessedOnly(full.derivations),
+    speedAdvantage: isNotAssessable("INT-1") ? [] : full.speedAdvantage,
+    crossChecks: full.crossChecks.filter(isAssessedCheck),
   };
 }
 
