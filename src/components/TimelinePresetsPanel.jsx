@@ -93,6 +93,11 @@ function useTimelineForm() {
   return { form, setForm, onShared, onLevel, onPhase };
 }
 
+/** @returns {string} How many rows a write stored and how many already matched. */
+function storedMessage(written, unchanged) {
+  return `Stored ${written} ${written === 1 ? "row" : "rows"}. ${unchanged} already matched.`;
+}
+
 /** Writes items, and turns a 409 into a confirmation dialog. */
 function useBulkApply({ scopeId, onWritten, setDialog, setError, setStatus }) {
   const [busy, setBusy] = useState(false);
@@ -103,7 +108,7 @@ function useBulkApply({ scopeId, onWritten, setDialog, setError, setStatus }) {
       setStatus("");
       try {
         const data = await applyBenchmarksBulk({ interceptorId: scopeId, uasGroup: "", confirmOverwrite, items });
-        setStatus(`Stored ${data.written} rows. ${data.unchanged} already matched.`);
+        setStatus(storedMessage(data.written, data.unchanged));
         setDialog(null);
         await onWritten();
       } catch (err) {
@@ -121,6 +126,48 @@ function useBulkApply({ scopeId, onWritten, setDialog, setError, setStatus }) {
   return { busy, apply };
 }
 
+/** The click handlers for the list and the confirm dialog. */
+function usePresetActions({ benchmarks, scopeId, onWritten, setError, setStatus }) {
+  const [dialog, setDialog] = useState(null);
+  const { busy, apply } = useBulkApply({ scopeId, onWritten, setDialog, setError, setStatus });
+  const applyNow = useCallback((items) => apply(items, false), [apply]);
+  const reviewJudgment = useCallback(
+    (items) => setDialog({ kind: "judgment", items, conflicts: conflictsFor(items, benchmarks, scopeId) }),
+    [benchmarks, scopeId]
+  );
+  const confirm = useCallback(() => apply(dialog.items, true), [apply, dialog]);
+  const cancel = useCallback(() => setDialog(null), []);
+  return { busy, dialog, applyNow, reviewJudgment, confirm, cancel };
+}
+
+/** The selected payload types, defaulting to the non-kinetic set. */
+function usePayloads(defaults) {
+  const [payloads, setPayloads] = useState(null);
+  const selected = useMemo(() => payloads ?? defaults?.defaultPayloadTypes ?? [], [payloads, defaults]);
+  const toggle = useCallback(
+    (type) => setPayloads(selected.includes(type) ? selected.filter((entry) => entry !== type) : [...selected, type]),
+    [selected]
+  );
+  return { selected, toggle };
+}
+
+/** Error and status lines above the preview. */
+function Messages({ previewErrors: lines, error, status }) {
+  return (
+    <>
+      {lines.length > 0 ? (
+        <Notice tone="error">
+          {lines.map((line) => (
+            <div key={line}>{line}</div>
+          ))}
+        </Notice>
+      ) : null}
+      {error ? <Notice tone="error">{error}</Notice> : null}
+      {status ? <Notice tone="info">{status}</Notice> : null}
+    </>
+  );
+}
+
 /**
  * @param {{ interceptors: object[], benchmarks: object[], isAdmin: boolean,
  *   onWritten: () => Promise<void> }} props
@@ -128,28 +175,14 @@ function useBulkApply({ scopeId, onWritten, setDialog, setError, setStatus }) {
 export function TimelinePresetsPanel({ interceptors, benchmarks, isAdmin, onWritten }) {
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
-  const [dialog, setDialog] = useState(null);
   const [scope, setScope] = useState("");
-  const [payloads, setPayloads] = useState(null);
   const defaults = useTimelineDefaults(setError);
   const { form, setForm, onShared, onLevel, onPhase } = useTimelineForm();
-  const selected = useMemo(() => payloads ?? defaults?.defaultPayloadTypes ?? [], [payloads, defaults]);
-  const preview = useTimelinePreview(form, selected);
+  const payloads = usePayloads(defaults);
+  const preview = useTimelinePreview(form, payloads.selected);
   const scopeId = scope === "" ? null : Number(scope);
-  const { busy, apply } = useBulkApply({ scopeId, onWritten, setDialog, setError, setStatus });
-
-  const loadDefaults = useCallback(() => {
-    if (defaults !== null) {
-      setForm(defaults.params);
-    }
-  }, [defaults, setForm]);
-  const togglePayload = useCallback((type) => {
-    setPayloads(selected.includes(type) ? selected.filter((entry) => entry !== type) : [...selected, type]);
-  }, [selected]);
-  const applyNow = useCallback((items) => apply(items, false), [apply]);
-  const reviewJudgment = useCallback((items) => {
-    setDialog({ kind: "judgment", items, conflicts: conflictsFor(items, benchmarks, scopeId) });
-  }, [benchmarks, scopeId]);
+  const actions = usePresetActions({ benchmarks, scopeId, onWritten, setError, setStatus });
+  const loadDefaults = useCallback(() => setForm(defaults === null ? null : defaults.params), [defaults, setForm]);
 
   return (
     <div>
@@ -160,21 +193,13 @@ export function TimelinePresetsPanel({ interceptors, benchmarks, isAdmin, onWrit
         onLevel={onLevel}
         onPhase={onPhase}
         payloadTypes={defaults?.payloadTypes || []}
-        payloads={selected}
-        onTogglePayload={togglePayload}
+        payloads={payloads.selected}
+        onTogglePayload={payloads.toggle}
         interceptors={interceptors}
         scope={scope}
         onScope={setScope}
       />
-      {preview.errors.length > 0 ? (
-        <Notice tone="error">
-          {preview.errors.map((line) => (
-            <div key={line}>{line}</div>
-          ))}
-        </Notice>
-      ) : null}
-      {error ? <Notice tone="error">{error}</Notice> : null}
-      {status ? <Notice tone="info">{status}</Notice> : null}
+      <Messages previewErrors={preview.errors} error={error} status={status} />
       {!isAdmin && preview.rows.length > 0 ? <p style={st.meta}>Read only. An admin applies presets.</p> : null}
       <TimelineStrip milestones={preview.milestones} />
       <PresetList
@@ -182,12 +207,12 @@ export function TimelinePresetsPanel({ interceptors, benchmarks, isAdmin, onWrit
         benchmarks={benchmarks}
         scopeId={scopeId}
         isAdmin={isAdmin}
-        busy={busy}
-        onApply={applyNow}
-        onApplyJudgment={reviewJudgment}
+        busy={actions.busy}
+        onApply={actions.applyNow}
+        onApplyJudgment={actions.reviewJudgment}
       />
-      {dialog ? (
-        <ConfirmApplyDialog dialog={dialog} busy={busy} onConfirm={() => apply(dialog.items, true)} onCancel={() => setDialog(null)} />
+      {actions.dialog ? (
+        <ConfirmApplyDialog dialog={actions.dialog} busy={actions.busy} onConfirm={actions.confirm} onCancel={actions.cancel} />
       ) : null}
     </div>
   );
