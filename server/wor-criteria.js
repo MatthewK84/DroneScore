@@ -16,12 +16,15 @@ const HEADER_FILL = "#E9ECE2";
 const LINE = "#C9CDBF";
 const INK = "#1A2018";
 
+/** What every row, area, or overall score without a score reads as. */
+export const NOT_ASSESSED = "Not Assessed";
+
 const STATUS_LABELS = Object.freeze({
   objective: "Objective",
   threshold: "Threshold",
   short: "Fell short",
-  not_established: "Not established",
-  not_measured: "Not measured",
+  not_established: NOT_ASSESSED,
+  not_measured: NOT_ASSESSED,
   stated: "Stated",
   claimed: "Claimed",
 });
@@ -74,7 +77,7 @@ function headerRow(labels) {
 export function formatMopValue(result) {
   const { value, units } = result;
   if (value === null || value === undefined) {
-    return "No data";
+    return NOT_ASSESSED;
   }
   if (typeof value === "object") {
     return `mean ${value.mean}${units} (min ${value.min}, max ${value.max}, n=${value.n})`;
@@ -218,13 +221,13 @@ function buildComplianceSection(criteria) {
       text:
         `Compliance is reported for ${system.name || "the system under test"}, from its own runs only.` +
         ` Achieved Objective on ${summary.objective}, met Threshold on ${summary.threshold}, ` +
-        `fell short on ${summary.short}. ${summary.not_established} KPPs have no benchmark ` +
-        `established and ${summary.not_measured} were not measured on this date. ` +
+        `fell short on ${summary.short}. ${summary.not_established} KPPs are Not Assessed because no ` +
+        `benchmark is stored, and ${summary.not_measured} are Not Assessed because nothing measured them on this date. ` +
         (summary.claimed > 0
           ? `${summary.claimed} are performance claims from the vendor's data sheet, shown but not scored until demonstrated. `
           : "") +
         "Section 4.2 requires benchmarks to be documented before test execution, so a " +
-        "KPP marked not established is an open action against the evaluation, not a pass.",
+        "KPP Not Assessed for want of a benchmark is an open action against the evaluation, not a pass.",
       fontSize: 8,
       margin: [0, 0, 0, 8],
     },
@@ -384,15 +387,15 @@ const SCORE_COLORS = Object.freeze({ 0: "#B3261E", 1: "#3E4A2E", 2: "#2E7D32" })
 const STATE_LABELS = Object.freeze({
   not_applicable: "N/A",
   reported: "Reported",
-  no_benchmark: "No T/O",
-  not_measured: "No data",
+  no_benchmark: NOT_ASSESSED,
+  not_measured: NOT_ASSESSED,
   claimed: "Claimed",
 });
 
 /** @returns {object} The Score cell for one scorecard row. */
 function scoreCell(row) {
   if (row.state !== "scored") {
-    return { text: STATE_LABELS[row.state] || "--", color: "#5A6355" };
+    return { text: STATE_LABELS[row.state] || NOT_ASSESSED, color: "#5A6355" };
   }
   return { text: String(row.score), bold: true, color: SCORE_COLORS[row.score] || INK };
 }
@@ -416,7 +419,7 @@ function areaTable(section) {
   return {
     table: {
       headerRows: 1,
-      widths: [46, "*", 40, 70, 34, 34, 40],
+      widths: [46, "*", 40, 70, 34, 34, 46],
       body: [headerRow(["ID", "MOP / KPP", "Unit", "Measured", "Thresh.", "Obj.", "Score"]), ...body],
     },
     layout: tableLayout(),
@@ -427,14 +430,14 @@ function areaTable(section) {
 
 /** @returns {object[]} The paragraph stating the Overall System Score. */
 function scorecardSummary(scorecard) {
-  const overall = scorecard.overall === null ? "not established" : `${scorecard.overall.toFixed(2)} of 2`;
+  const overall = scorecard.overall === null ? NOT_ASSESSED : `${scorecard.overall.toFixed(2)} of 2`;
   return [
     {
       text:
         `Overall System Score ${overall}, the weighted average of the five Core Capability ` +
         `Areas at equal weight. ${scorecard.states.scored} of ${scorecard.total} rows carry ` +
-        `a score. Of the rest: ${scorecard.states.no_benchmark} with no Threshold or ` +
-        `Objective stored, ${scorecard.states.not_measured} not measured on this date, ` +
+        `a score. Of the rest: ${scorecard.states.no_benchmark} Not Assessed with no Threshold or ` +
+        `Objective stored, ${scorecard.states.not_measured} Not Assessed with no measurement on this date, ` +
         `${scorecard.states.reported} reported as specifications the criteria do not score, ` +
         `${scorecard.states.claimed} vendor performance claims not yet demonstrated, ` +
         `${scorecard.states.not_applicable} marked not applicable to this configuration. ` +
@@ -482,7 +485,7 @@ function buildScorecardSection(criteria) {
   }
   const blocks = [...scorecardSummary(scorecard), ...effectivenessVerdict(scorecard)];
   for (const area of scorecard.areas) {
-    const score = area.score === null ? "not established" : `${area.score.toFixed(2)} of 2`;
+    const score = area.score === null ? NOT_ASSESSED : `${area.score.toFixed(2)} of 2`;
     blocks.push({
       text: `Criterion ${area.id} - ${area.name}: ${score} from ${area.states.scored} of ${area.total} rows`,
       bold: true,
@@ -541,9 +544,12 @@ function buildTimelineSection(criteria) {
   ];
 }
 
-/** @returns {string} A score out of two, or a dash. */
-function outOfTwo(value) {
-  return value === null || value === undefined ? "--" : value.toFixed(2);
+/** @returns {object} A score cell out of two, or a small Not Assessed cell. */
+function outOfTwo(value, bold = false) {
+  if (value === null || value === undefined) {
+    return { text: NOT_ASSESSED, fontSize: 6, color: "#5A6355" };
+  }
+  return { text: value.toFixed(2), bold };
 }
 
 /** @returns {object | null} Section 5's Pk rollup for one system, shaped for reconcilePk. */
@@ -572,7 +578,7 @@ function comparisonRow(pkg, stats) {
     String(pkg.runs),
     pk === null || pk === undefined ? "--" : pk.toFixed(2),
     ...scorecard.areas.map((area) => outOfTwo(area.score)),
-    { text: outOfTwo(scorecard.overall), bold: true },
+    outOfTwo(scorecard.overall, true),
     `${scorecard.states.scored} / ${scorecard.total}`,
     {
       text: flagged ? "Not Militarily Effective" : "No critical failure",
@@ -615,7 +621,7 @@ export function buildSystemComparisonSection(criteria, stats) {
     {
       table: {
         headerRows: 1,
-        widths: ["*", 26, 28, 26, 26, 26, 26, 26, 38, 40, 78],
+        widths: ["*", 26, 28, 34, 34, 34, 34, 34, 38, 40, 70],
         body: [
           headerRow(["System", "Runs", "Pk", "C1", "C2", "C3", "C4", "C5", "Overall", "Scored", "Status"]),
           ...systems.map((pkg) => comparisonRow(pkg, stats)),

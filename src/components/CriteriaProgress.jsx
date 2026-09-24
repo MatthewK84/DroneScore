@@ -28,14 +28,19 @@ const SEGMENTS = Object.freeze([
   { key: "objective", label: "Objective met", color: "#1E5A63" },
   { key: "threshold", label: "Threshold met", color: "#5E9EA8" },
   { key: "notMet", label: "Not met", color: "#C9502A" },
-  { key: "pending", label: "Not yet evidenced", color: "#DDE1D6" },
+  { key: "pending", label: "Not Assessed", color: "#DDE1D6" },
 ]);
 
 const SEGMENT_GAP_PX = 2;
 
-/** @returns {string} A score out of two, or a dash. */
+/** @returns {string} A score out of two, or Not Assessed when nothing scored. */
 function score(value) {
-  return value === null || value === undefined ? "--" : value.toFixed(2);
+  return value === null || value === undefined ? "Not Assessed" : value.toFixed(2);
+}
+
+/** @returns {string} A score with its scale, or Not Assessed alone. */
+function scoreOfTwo(value) {
+  return value === null || value === undefined ? score(value) : `${score(value)} of 2`;
 }
 
 /**
@@ -54,7 +59,7 @@ function meterCounts(system) {
     objective: attainment.objective,
     threshold: attainment.threshold,
     notMet: attainment.notMet,
-    // A vendor's performance claim is not evidence, so it counts as not yet evidenced.
+    // A vendor's performance claim is not evidence, so it counts as Not Assessed.
     pending: states.no_benchmark + states.not_measured + (states.claimed || 0),
   };
   return {
@@ -112,7 +117,7 @@ function SystemProgress({ system }) {
       </div>
       {system.notMilitarilyEffective ? <EffectivenessFlag failures={system.criticalFailures} /> : null}
       <div style={{ display: "flex", gap: 22, flexWrap: "wrap", margin: "12px 0 10px" }}>
-        <StatTile label="Overall score" value={score(system.overall)} unit="of 2" />
+        <StatTile label="Overall score" value={score(system.overall)} unit={system.overall === null ? "" : "of 2"} />
         <StatTile label="Criteria met" value={String(meter.met)} unit={`of ${meter.applicable}`} />
       </div>
       <Meter counts={meter.counts} applicable={meter.applicable} />
@@ -230,7 +235,7 @@ function AreaRow({ areas }) {
       {areas.map((area) => (
         <div key={area.id} title={area.name} style={{ textAlign: "center", padding: "6px 2px", border: `1px solid ${C.line}`, borderRadius: 8 }}>
           <div style={{ ...st.stripLabel, fontSize: 9, color: C.inkMuted }}>Crit {area.id}</div>
-          <div style={{ fontSize: 17, fontWeight: 600, color: area.score === null ? C.inkMuted : C.ink }}>
+          <div style={{ fontSize: area.score === null ? 10 : 17, fontWeight: 600, color: area.score === null ? C.inkMuted : C.ink }}>
             {score(area.score)}
           </div>
           <div style={{ fontFamily: MONO, fontSize: 9, color: C.inkMuted }}>
@@ -312,7 +317,7 @@ function History({ history }) {
           {last ? <circle cx={last.x} cy={last.y} r="4" fill="#1E5A63" stroke={C.panel} strokeWidth="2" /> : null}
           {drawn.map((point) => (
             <circle key={point.entry.date} cx={point.x} cy={point.y} r="12" fill="transparent">
-              <title>{`${shortDate(point.entry.date)}: ${score(point.entry.overall)} of 2, ${point.entry.scored} rows scored`}</title>
+              <title>{`${shortDate(point.entry.date)}: ${scoreOfTwo(point.entry.overall)}, ${point.entry.scored} rows scored`}</title>
             </circle>
           ))}
         </svg>

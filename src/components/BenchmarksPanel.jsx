@@ -166,7 +166,7 @@ export function BenchmarksPanel({ catalog, interceptors, isAdmin }) {
     <div>
       <Notice tone="warn">
         Section 4.2 requires Threshold and Objective values to be documented before test
-        execution. Any KPP left without one prints as not established on the report, which
+        execution. Any KPP left without one prints as Not Assessed on the report, which
         is an open action against the evaluation rather than a pass.
       </Notice>
 
@@ -437,7 +437,7 @@ function StoredList({ benchmarks, interceptors }) {
     return (
       <div style={st.card}>
         <h2 style={st.secHead}>Stored Benchmarks</h2>
-        <p style={st.meta}>None stored yet. Every KPP will print as not established.</p>
+        <p style={st.meta}>None stored yet. Every KPP will print as Not Assessed.</p>
       </div>
     );
   }

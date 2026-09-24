@@ -117,7 +117,7 @@ export function SystemProfilePanel({ catalog, interceptors, isAdmin, onChanged }
           </select>
         </label>
         <p style={st.meta}>
-          {countAnswered(profile)} answered. Blank fields print as not measured on the report
+          {countAnswered(profile)} answered. Blank fields print as Not Assessed on the report
           rather than being left out, so a gap stays visible.
         </p>
       </div>
@@ -314,7 +314,7 @@ function NarrativeCard({ profile, onAnswer, disabled }) {
       <p style={{ ...st.meta, marginBottom: 12, fontFamily: MONO }}>
         These MOPs are stated rather than measured. The text prints verbatim in the
         report; the verdict beside it is what the scorecard scores, and leaving it
-        unanswered reports the row as having no data rather than as a pass.
+        unanswered reports the row as Not Assessed rather than as a pass.
       </p>
       {NARRATIVE_MOPS.map((item) => (
         <NarrativeField key={item.key} item={item} profile={profile} onAnswer={onAnswer} disabled={disabled} />
