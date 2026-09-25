@@ -2,72 +2,24 @@ import { getPublicDay } from "../api.js";
 import { usePolledResource } from "../hooks.js";
 import { C, MONO, pillStyle, st } from "../styles.js";
 import { CriteriaProgress } from "./CriteriaProgress.jsx";
+import { EngagementBoard } from "./EngagementBoard.jsx";
 import { Loading } from "./ui.jsx";
 import { WeatherPanel } from "./WeatherPanel.jsx";
 
 /**
- * Open View for the viewer role: a running tally sheet and each
- * interceptor's progress toward JIATF 401 C4 criteria compliance. It shows
- * the live range weather and today's scored items, each with the weather
- * captured at scoring time. No tabs, no fleet, no schedule, no feedback,
+ * Open View for the viewer role: today's runs on the engagement board, the
+ * live range weather, and, at the foot of the page, each interceptor's
+ * progress toward JIATF 401 C4 criteria compliance. Each run carries the
+ * weather captured at scoring time. No tabs, no fleet, no schedule, no feedback,
  * no reports, and no way to edit anything. Polls so the tally tracks
  * scorer entries in near real time.
  */
 
 const POLL_MS = 15000;
 
-const OUTCOMES = Object.freeze({
-  success: { label: "Success", color: C.success },
-  unsuccessful: { label: "Miss", color: C.miss },
-  not_attempted: { label: "No Attempt", color: C.noAttempt },
-});
-
-/** Abort runs report whether the abort command worked, not an intercept. */
-const ABORT_OUTCOMES = Object.freeze({
-  success: { label: "Abort OK", color: C.success },
-  unsuccessful: { label: "Abort Failed", color: C.miss },
-  not_attempted: { label: "No Attempt", color: C.noAttempt },
-});
-
-/** @returns {boolean} True when the row is an intentional abort run. */
-function isAbortRun(engagement) {
-  return engagement.runType === "abort";
-}
-
 /** @returns {string} Pk to two decimals, or a dash. */
 function fmtPk(value) {
   return value === null || value === undefined ? "--" : value.toFixed(2);
-}
-
-/** @returns {string} Local HH:MM from a timestamp, or "". */
-function shortTime(iso) {
-  if (typeof iso !== "string") {
-    return "";
-  }
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) {
-    return "";
-  }
-  return parsed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
-
-/** @returns {string} Compact weather line for one scored item, or "". */
-function weatherLine(weather) {
-  if (!weather) {
-    return "";
-  }
-  const parts = [];
-  if (typeof weather.tempF === "number") {
-    parts.push(`${weather.tempF} F`);
-  }
-  if (typeof weather.windMph === "number") {
-    const gust = typeof weather.gustMph === "number" ? ` G${weather.gustMph}` : "";
-    parts.push(`wind ${weather.windMph}${gust} mph`);
-  }
-  if (weather.description) {
-    parts.push(weather.description);
-  }
-  return parts.join(" · ");
 }
 
 /**
@@ -110,13 +62,9 @@ export function OpenView({ onSignOut }) {
       ) : (
         <div>
           <DayStrip day={data?.day} stats={data?.stats} isToday={isCurrentDay(data?.day)} />
-          <CriteriaProgress />
+          <Tally engagements={data?.engagements || []} day={data?.day} isToday={isCurrentDay(data?.day)} />
           <WeatherPanel />
-          <TallySheet
-            engagements={data?.engagements || []}
-            day={data?.day}
-            isToday={isCurrentDay(data?.day)}
-          />
+          <CriteriaProgress />
         </div>
       )}
 
@@ -159,36 +107,12 @@ function DayStrip({ day, stats, isToday }) {
   );
 }
 
-/** The running tally of scored items, weather at time of score included. */
-function TallySheet({ engagements, day, isToday }) {
+/** The day's runs on the shared engagement board, or a waiting card before the first. */
+function Tally({ engagements, day, isToday }) {
   if (engagements.length === 0) {
     return <EmptyTally day={day} isToday={isToday} />;
   }
-  const redAir = engagements.filter((row) => !isAbortRun(row));
-  const aborts = engagements.filter(isAbortRun);
-  return (
-    <div>
-      <div style={st.card}>
-        <h2 style={st.secHead}>Red Air Intercept Runs</h2>
-        {redAir.length === 0 ? (
-          <p style={st.meta}>No Red Air intercept runs scored yet.</p>
-        ) : (
-          redAir.map((engagement) => <TallyRow key={engagement.id} engagement={engagement} />)
-        )}
-      </div>
-      {aborts.length === 0 ? null : (
-        <div style={st.card}>
-          <h2 style={st.secHead}>Intentional Abort Runs</h2>
-          <p style={{ ...st.meta, marginTop: -6, marginBottom: 10 }}>
-            Abort runs test the abort command and are excluded from Pk.
-          </p>
-          {aborts.map((engagement) => (
-            <TallyRow key={engagement.id} engagement={engagement} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
+  return <EngagementBoard engagements={engagements} />;
 }
 
 /** A friendly card shown while the tally has no entries. */
@@ -207,35 +131,3 @@ function EmptyTally({ day, isToday }) {
   );
 }
 
-/** One scored item with outcome, metrics, and its weather snapshot. */
-function TallyRow({ engagement }) {
-  const labels = isAbortRun(engagement) ? ABORT_OUTCOMES : OUTCOMES;
-  const outcome = labels[engagement.outcome];
-  const wx = weatherLine(engagement.weather);
-  return (
-    <div style={st.rowItem}>
-      <div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ fontFamily: MONO, fontSize: 12, color: C.inkMuted }}>
-            {shortTime(engagement.occurredAt)}
-          </span>
-          <strong style={{ fontFamily: MONO, fontSize: 14 }}>
-            {engagement.interceptorName || "Unassigned"}
-          </strong>
-          <span style={st.meta}>vs {engagement.droneName || "Unassigned"}</span>
-          <span style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700, color: outcome?.color || C.inkMuted, textTransform: "uppercase" }}>
-            {outcome?.label || engagement.outcome}
-          </span>
-        </div>
-        <div style={{ ...st.meta, marginTop: 4 }}>
-          {engagement.sortie ? `${engagement.sortie} | ` : ""}
-          {engagement.timeToInterceptS !== null ? `${engagement.timeToInterceptS}s | ` : ""}
-          {engagement.engagementRangeM !== null ? `${engagement.engagementRangeM}m` : ""}
-        </div>
-        {wx ? (
-          <div style={{ ...st.meta, marginTop: 3, color: C.olive }}>{wx}</div>
-        ) : null}
-      </div>
-    </div>
-  );
-}

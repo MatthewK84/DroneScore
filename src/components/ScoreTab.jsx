@@ -13,6 +13,8 @@ import {
 import { useStopwatch } from "../hooks.js";
 import { C, MONO, st } from "../styles.js";
 import { Loading, Notice } from "./ui.jsx";
+import { splitAreas } from "../criteria-view.js";
+import { EngagementBoard } from "./EngagementBoard.jsx";
 import { SCENARIOS } from "./StagePicker.jsx";
 import { WeatherPanel } from "./WeatherPanel.jsx";
 
@@ -289,7 +291,6 @@ export function ScoreTab({ isAdmin }) {
   return (
     <div>
       <DayStrip day={day} stats={stats} />
-      <ScorecardStrip systems={scorecards} />
       <WeatherPanel />
       {closed ? (
         <Notice tone="warn">
@@ -318,6 +319,7 @@ export function ScoreTab({ isAdmin }) {
         onEdit={beginEdit}
         onDelete={remove}
       />
+      <ScorecardStrip systems={scorecards} />
     </div>
   );
 }
@@ -412,8 +414,18 @@ function SystemLine({ name, scorecard, showName }) {
           scored 0 against a Critical KPP.
         </Notice>
       ) : null}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 5, marginTop: 8 }}>
-        {scorecard.areas.map((area) => (
+      <AreaTiles areas={scorecard.areas} />
+    </div>
+  );
+}
+
+/** Area tiles for the areas with assessed rows, and one line naming the rest. */
+function AreaTiles({ areas }) {
+  const { shown, emptyNote } = splitAreas(areas);
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.max(shown.length, 1)}, 1fr)`, gap: 5 }}>
+        {shown.map((area) => (
           <div key={area.id} style={{ textAlign: "center", padding: "6px 2px", border: `1px solid ${C.line}`, borderRadius: 8 }}>
             <div style={{ ...st.stripLabel, fontSize: 9, color: C.inkMuted }}>Crit {area.id}</div>
             <div style={{ fontFamily: MONO, fontSize: area.score === null ? 10 : 17, color: area.score === null ? C.inkMuted : C.olive }}>
@@ -422,6 +434,7 @@ function SystemLine({ name, scorecard, showName }) {
           </div>
         ))}
       </div>
+      {emptyNote ? <p style={{ ...st.meta, fontSize: 11, margin: "6px 0 0" }}>{emptyNote}</p> : null}
     </div>
   );
 }
@@ -607,96 +620,21 @@ function Stopwatch({ stopwatch, onUse }) {
   );
 }
 
-/** The scrollable log of engagements for the current day. */
+/**
+ * The day's engagements on the shared board, with Edit and Delete beside
+ * each card for an admin.
+ */
 function EngagementLog({ engagements, isAdmin, onEdit, onDelete }) {
   if (engagements.length === 0) {
     return <p style={st.meta}>No engagements logged yet today.</p>;
   }
-  return (
-    <div style={st.card}>
-      <h2 style={st.secHead}>Engagement Log</h2>
-      {engagements.map((engagement) => (
-        <EngagementRow
-          key={engagement.id}
-          engagement={engagement}
-          isAdmin={isAdmin}
-          onEdit={onEdit}
-          onDelete={onDelete}
-        />
-      ))}
-    </div>
-  );
-}
-
-/**
- * @param {string} key
- * @returns {string} A readable kill chain stage for the log line, so a
- *   scorer can see at a glance which runs carry captured stage data and
- *   which will be inferred on the report.
- */
-function stageLabel(key) {
-  const found = KILL_CHAIN_LABELS[key];
-  return found ? `Stage: ${found}` : "";
-}
-
-const KILL_CHAIN_LABELS = Object.freeze({
-  none: "No Detect",
-  detect: "Detect",
-  track: "Track",
-  classify: "Classify",
-  identify: "Identify",
-  engage: "Engage",
-  defeat: "Defeat",
-});
-
-/** A single engagement line with outcome color and admin controls. */
-function EngagementRow({ engagement, isAdmin, onEdit, onDelete }) {
-  const runType = engagement.runType || "red_air";
-  const isAbort = runType === "abort";
-  const outcome = outcomesFor(runType).find((option) => option.value === engagement.outcome);
-  return (
-    <div style={st.rowItem}>
-      <div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span
-            style={{
-              fontFamily: MONO,
-              fontSize: 10,
-              fontWeight: 500,
-              padding: "2px 6px",
-              borderRadius: 4,
-              textTransform: "uppercase",
-              color: isAbort ? C.noAttempt : C.olive,
-              border: `1px solid ${isAbort ? C.noAttempt : C.olive}`,
-            }}
-          >
-            {isAbort ? "Abort" : "Red Air"}
-          </span>
-          <strong style={{ fontFamily: MONO, fontSize: 14 }}>
-            {engagement.interceptorName || "Unassigned"}
-          </strong>
-          <span style={st.meta}>vs {engagement.droneName || "Unassigned"}</span>
-          <span style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700, color: outcome?.color || C.inkMuted, textTransform: "uppercase" }}>
-            {outcome?.label || engagement.outcome}
-          </span>
-        </div>
-        <div style={{ ...st.meta, marginTop: 4 }}>
-          {engagement.scenario ? `${engagement.scenario.toUpperCase()} | ` : ""}
-          {engagement.stageReached ? `${stageLabel(engagement.stageReached)} | ` : ""}
-          {engagement.sortie ? `${engagement.sortie} | ` : ""}
-          {engagement.timeToInterceptS !== null ? `${engagement.timeToInterceptS}s | ` : ""}
-          {engagement.engagementRangeM !== null ? `${engagement.engagementRangeM}m` : ""}
-        </div>
-        {engagement.notes ? (
-          <div style={{ fontSize: 13, color: C.ink, marginTop: 4 }}>{engagement.notes}</div>
-        ) : null}
-      </div>
-      {isAdmin ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+  const actions = isAdmin
+    ? (engagement) => (
+        <div style={{ display: "flex", gap: 8 }}>
           <button style={st.ghostBtn} onClick={() => onEdit(engagement)}>Edit</button>
           <button style={st.dangerBtn} onClick={() => onDelete(engagement.id)}>Delete</button>
         </div>
-      ) : null}
-    </div>
-  );
+      )
+    : undefined;
+  return <EngagementBoard engagements={engagements} detailed renderActions={actions} />;
 }
