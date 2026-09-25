@@ -1,5 +1,6 @@
 import { getPublicProgress } from "../api.js";
 import { usePolledResource } from "../hooks.js";
+import { splitAreas } from "../criteria-view.js";
 import { C, MONO, st } from "../styles.js";
 
 /**
@@ -230,19 +231,23 @@ function Legend({ counts }) {
 
 /** The five Core Capability Area scores as a row of small figures. */
 function AreaRow({ areas }) {
+  const { shown, emptyNote } = splitAreas(areas);
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 6, marginTop: 14 }}>
-      {areas.map((area) => (
-        <div key={area.id} title={area.name} style={{ textAlign: "center", padding: "6px 2px", border: `1px solid ${C.line}`, borderRadius: 8 }}>
-          <div style={{ ...st.stripLabel, fontSize: 9, color: C.inkMuted }}>Crit {area.id}</div>
-          <div style={{ fontSize: area.score === null ? 10 : 17, fontWeight: 600, color: area.score === null ? C.inkMuted : C.ink }}>
-            {score(area.score)}
+    <div style={{ marginTop: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.max(shown.length, 1)}, 1fr)`, gap: 6 }}>
+        {shown.map((area) => (
+          <div key={area.id} title={area.name} style={{ textAlign: "center", padding: "6px 2px", border: `1px solid ${C.line}`, borderRadius: 8 }}>
+            <div style={{ ...st.stripLabel, fontSize: 9, color: C.inkMuted }}>Crit {area.id}</div>
+            <div style={{ fontSize: area.score === null ? 10 : 17, fontWeight: 600, color: area.score === null ? C.inkMuted : C.ink }}>
+              {score(area.score)}
+            </div>
+            <div style={{ fontFamily: MONO, fontSize: 9, color: C.inkMuted }}>
+              {area.scored}/{area.total}
+            </div>
           </div>
-          <div style={{ fontFamily: MONO, fontSize: 9, color: C.inkMuted }}>
-            {area.scored}/{area.total}
-          </div>
-        </div>
-      ))}
+        ))}
+      </div>
+      {emptyNote ? <p style={{ ...st.meta, fontSize: 11, margin: "6px 0 0" }}>{emptyNote}</p> : null}
     </div>
   );
 }
